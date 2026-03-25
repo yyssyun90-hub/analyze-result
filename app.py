@@ -471,9 +471,15 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
         exam_data = student_data[student_data["考试"] == exam]
         if not exam_data.empty:
             html_content += f"<h2>{exam}</h2>"
-            html_content += "台_
-<th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th>
-</tr>"
+            html_content += "<table>"
+            html_content += """
+<tr>
+<th>科目</th>
+<th>成绩</th>
+<th>班级平均</th>
+<th>差距</th>
+</tr>
+"""
             
             for subject in subjects:
                 code = subject["code"]
@@ -484,7 +490,13 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
                         diff = score - avg
                         diff_color = "green" if diff >= 0 else "red"
                         name = subject["name_zh"] if lang == "zh" else subject["name_ms"]
-                        html_content += f"<tr><td>{name}</td><td>{score:.1f}</td><td>{avg:.1f}</td><td style='color:{diff_color}'>{diff:+.1f}</td></tr>"
+                        html_content += f"""
+<tr>
+<td>{name}</td>
+<td>{score:.1f}</td>
+<td>{avg:.1f}</td>
+<td style='color:{diff_color}'>{diff:+.1f}</td>
+</tr>"""
                     except:
                         pass
             
