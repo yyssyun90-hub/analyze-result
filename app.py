@@ -3,32 +3,36 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-import io
 import numpy as np
 from supabase import create_client
-import os
 
 # ========== 页面配置 ==========
 st.set_page_config(
-    page_title="Sistem Analisis Akademik | 成绩分析系统",
+    page_title="Sistem Analisis Akademik SJKHK | 成绩分析系统",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# ========== 校领导账号 ==========
+PRINCIPAL_PASSWORD = "SJKHK000"
+
 # ========== 多语言配置 ==========
 TEXTS = {
     "zh": {
-        "app_title": "班级成绩分析系统",
-        "login": "班主任登录",
+        "app_title": "SJKHK 成绩分析系统",
+        "login": "登录",
         "password": "密码",
         "login_btn": "登录",
         "logout": "退出登录",
         "select_class": "选择班级",
+        "principal_mode": "校领导登录",
+        "teacher_mode": "班主任登录",
         "wrong_password": "密码错误！",
         "student_performance": "📊 学生个人成绩",
         "class_performance": "📈 班级成绩分析",
         "data_management": "📁 成绩管理",
+        "class_settings": "🏫 班级设置",
         "settings": "⚙️ 系统设置",
         "help": "ℹ️ 帮助",
         "core_only": "仅主科",
@@ -43,14 +47,12 @@ TEXTS = {
         "box_plot": "箱线图",
         "generate_report": "生成报告",
         "download_report": "下载报告",
-        "no_data": "暂无数据",
         "no_students": "请先在「成绩管理」中导入学生名单",
         "no_exams": "暂无考试成绩数据，请先在「成绩管理」中导入成绩",
         "import_students": "导入学生名单",
         "import_grades": "导入考试成绩",
         "exam_name": "考试名称",
         "exam_date": "考试日期",
-        "file_upload": "上传文件",
         "success": "成功！",
         "error": "错误",
         "student_no": "学号",
@@ -58,37 +60,39 @@ TEXTS = {
         "rank": "排名",
         "total_score": "总分",
         "average": "平均分",
-        "strength": "优势科目",
-        "weakness": "需要加强",
-        "suggestions": "学习建议",
         "history_exams": "历史考试",
         "delete": "删除",
         "view": "查看",
-        "class_overview": "班级概况",
         "student_count": "学生人数",
         "class_avg": "全科平均分",
         "highest_total": "最高总分",
         "pass_rate": "及格率",
-        "score_distribution": "成绩分布",
         "ranking_table": "成绩排名",
-        "generate_advice": "生成学习建议",
-        "export_report": "导出报告",
+        "teacher_name_zh": "班主任姓名 (中文)",
+        "teacher_name_ms": "Nama Guru Kelas (BM)",
+        "edit_teacher": "编辑班主任信息",
+        "save_teacher": "保存班主任信息",
+        "teacher_updated": "班主任信息已更新！",
+        "switch_class": "切换班级",
         "school_name": "学校名称",
         "academic_year": "学年",
         "save_settings": "保存设置",
         "settings_saved": "设置已保存！"
     },
     "ms": {
-        "app_title": "Sistem Analisis Prestasi Kelas",
-        "login": "Log Masuk Guru Kelas",
+        "app_title": "Sistem Analisis Akademik SJKHK",
+        "login": "Log Masuk",
         "password": "Kata Laluan",
         "login_btn": "Log Masuk",
         "logout": "Log Keluar",
         "select_class": "Pilih Kelas",
+        "principal_mode": "Log Masuk Pentadbir",
+        "teacher_mode": "Log Masuk Guru",
         "wrong_password": "Kata laluan salah!",
         "student_performance": "📊 Analisis Pelajar Individu",
         "class_performance": "📈 Analisis Prestasi Kelas",
         "data_management": "📁 Pengurusan Data",
+        "class_settings": "🏫 Tetapan Kelas",
         "settings": "⚙️ Tetapan Sistem",
         "help": "ℹ️ Bantuan",
         "core_only": "Subjek Teras Sahaja",
@@ -103,14 +107,12 @@ TEXTS = {
         "box_plot": "Carta Kotak",
         "generate_report": "Hasilkan Laporan",
         "download_report": "Muat Turun Laporan",
-        "no_data": "Tiada data",
         "no_students": "Sila import senarai pelajar di 'Pengurusan Data'",
         "no_exams": "Tiada data peperiksaan, sila import di 'Pengurusan Data'",
         "import_students": "Import Senarai Pelajar",
         "import_grades": "Import Markah Peperiksaan",
         "exam_name": "Nama Peperiksaan",
         "exam_date": "Tarikh Peperiksaan",
-        "file_upload": "Muat Naik Fail",
         "success": "Berjaya!",
         "error": "Ralat",
         "student_no": "No. Pelajar",
@@ -118,21 +120,20 @@ TEXTS = {
         "rank": "Kedudukan",
         "total_score": "Jumlah Markah",
         "average": "Purata",
-        "strength": "Subjek Kekuatan",
-        "weakness": "Perlu Diperbaiki",
-        "suggestions": "Cadangan",
         "history_exams": "Peperiksaan Lepas",
         "delete": "Padam",
         "view": "Lihat",
-        "class_overview": "Gambaran Kelas",
         "student_count": "Bilangan Pelajar",
         "class_avg": "Purata Keseluruhan",
         "highest_total": "Jumlah Tertinggi",
         "pass_rate": "Kadar Lulus",
-        "score_distribution": "Taburan Markah",
         "ranking_table": "Kedudukan Markah",
-        "generate_advice": "Hasilkan Cadangan",
-        "export_report": "Eksport Laporan",
+        "teacher_name_zh": "Nama Guru Kelas (Cina)",
+        "teacher_name_ms": "Nama Guru Kelas (BM)",
+        "edit_teacher": "Edit Maklumat Guru",
+        "save_teacher": "Simpan Maklumat Guru",
+        "teacher_updated": "Maklumat guru dikemas kini!",
+        "switch_class": "Tukar Kelas",
         "school_name": "Nama Sekolah",
         "academic_year": "Tahun Akademik",
         "save_settings": "Simpan Tetapan",
@@ -197,17 +198,19 @@ def init_session_state():
         st.session_state.level = None
     if "grade" not in st.session_state:
         st.session_state.grade = None
+    if "is_principal" not in st.session_state:
+        st.session_state.is_principal = False
 
 # ========== Supabase 连接 ==========
 @st.cache_resource
 def init_supabase():
-    """初始化 Supabase 客户端（使用缓存）"""
+    """初始化 Supabase 客户端"""
     try:
         supabase_url = st.secrets.get("SUPABASE_URL", "")
         supabase_key = st.secrets.get("SUPABASE_KEY", "")
         
         if not supabase_url or not supabase_key:
-            st.warning("⚠️ 请配置 Supabase 连接信息\n\n在 Streamlit Cloud 的 Secrets 中添加：\nSUPABASE_URL\nSUPABASE_KEY")
+            st.warning("⚠️ 请配置 Supabase 连接信息")
             return None
         
         return create_client(supabase_url, supabase_key)
@@ -219,11 +222,23 @@ def init_supabase():
 def get_classes(supabase):
     """获取所有班级"""
     try:
-        response = supabase.table("classes").select("*").execute()
+        response = supabase.table("classes").select("*").order("grade").execute()
         return response.data if response.data else []
     except Exception as e:
         st.error(f"获取班级失败: {e}")
         return []
+
+def update_class_teacher(supabase, class_id, teacher_zh, teacher_ms):
+    """更新班级班主任信息"""
+    try:
+        supabase.table("classes").update({
+            "teacher_zh": teacher_zh,
+            "teacher_ms": teacher_ms
+        }).eq("id", class_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"更新班主任信息失败: {e}")
+        return False
 
 def get_students(supabase, class_id):
     """获取班级学生列表"""
@@ -246,7 +261,7 @@ def add_students(supabase, class_id, students_df):
                 "name_ms": row.get("姓名_马来文", row["姓名"])
             })
         
-        response = supabase.table("students").insert(records).execute()
+        supabase.table("students").insert(records).execute()
         return True
     except Exception as e:
         st.error(f"添加学生失败: {e}")
@@ -393,7 +408,8 @@ def create_radar_chart(student_scores, class_avg, subjects, lang):
         if code in student_scores and student_scores[code]:
             try:
                 student_values.append(float(student_scores[code]))
-                class_values.append(float(class_avg.get(code, 0)))
+                class_avg_val = class_avg.get(code, 0) if class_avg else 0
+                class_values.append(float(class_avg_val))
                 labels.append(subject["name_zh"] if lang == "zh" else subject["name_ms"])
             except:
                 pass
@@ -425,17 +441,23 @@ def create_radar_chart(student_scores, class_avg, subjects, lang):
 
 def create_box_plot(class_df, subjects, exam_name, lang):
     """箱线图"""
+    if class_df.empty:
+        return None
+    
     fig = go.Figure()
     
     for subject in subjects:
         code = subject["code"]
-        if code in class_df.columns:
+        if code in class_df.columns and not class_df[code].dropna().empty:
             name = subject["name_zh"] if lang == "zh" else subject["name_ms"]
             fig.add_trace(go.Box(
                 y=class_df[code].dropna(),
                 name=name,
                 boxmean='sd'
             ))
+    
+    if len(fig.data) == 0:
+        return None
     
     fig.update_layout(
         title=f"{exam_name} - 成绩分布" if lang == "zh" else f"{exam_name} - Taburan Markah",
@@ -446,40 +468,32 @@ def create_box_plot(class_df, subjects, exam_name, lang):
 
 def generate_simple_report(student_name, student_data, exams, subjects, class_avg_data, lang):
     """生成简单的 HTML 报告"""
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{student_name} - 成绩报告</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            h1 {{ color: #333; text-align: center; }}
-            h2 {{ color: #666; margin-top: 30px; }}
-            table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
-            th, td {{ border: 1px solid #ddd; padding: 12px; text-align: center; }}
-            th {{ background-color: #4CAF50; color: white; }}
-            .advice {{ background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin-top: 30px; }}
-        </style>
-    </head>
-    <body>
-        <h1>{student_name} - 成绩分析报告</h1>
-        <p style="text-align:center">生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-    """
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{student_name} - 成绩报告</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        h1 {{ color: #333; text-align: center; }}
+        h2 {{ color: #666; margin-top: 30px; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+        th, td {{ border: 1px solid #ddd; padding: 12px; text-align: center; }}
+        th {{ background-color: #4CAF50; color: white; }}
+        .advice {{ background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin-top: 30px; }}
+    </style>
+</head>
+<body>
+    <h1>{student_name} - 成绩分析报告</h1>
+    <p style="text-align:center">生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+"""
     
     for exam in exams:
         exam_data = student_data[student_data["考试"] == exam]
         if not exam_data.empty:
             html_content += f"<h2>{exam}</h2>"
             html_content += "<table>"
-            html_content += """
-<tr>
-<th>科目</th>
-<th>成绩</th>
-<th>班级平均</th>
-<th>差距</th>
-</tr>
-"""
+            html_content += "<tr><th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th></tr>"
             
             for subject in subjects:
                 code = subject["code"]
@@ -490,33 +504,32 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
                         diff = score - avg
                         diff_color = "green" if diff >= 0 else "red"
                         name = subject["name_zh"] if lang == "zh" else subject["name_ms"]
-                        html_content += f"""
-<tr>
-<td>{name}</td>
-<td>{score:.1f}</td>
-<td>{avg:.1f}</td>
-<td style='color:{diff_color}'>{diff:+.1f}</td>
-</tr>"""
+                        html_content += f"<tr><td>{name}</td><td>{score:.1f}</td><td>{avg:.1f}</td><td style='color:{diff_color}'>{diff:+.1f}</td></tr>"
                     except:
                         pass
-            
             html_content += "</table>"
     
     advice = generate_rule_based_advice(student_data, subjects, exams[-1], lang)
     html_content += f"""
-        <div class="advice">
-            <h3>📝 学习建议</h3>
-            {advice.replace('\n', '<br>')}
-        </div>
-    </body>
-    </html>
-    """
+    <div class="advice">
+        <h3>📝 学习建议</h3>
+        {advice.replace(chr(10), '<br>')}
+    </div>
+</body>
+</html>"""
     
     return html_content
 
 def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
     """基于规则生成学习建议"""
-    latest_data = student_data[student_data["考试"] == latest_exam].iloc[0]
+    if student_data.empty:
+        return "暂无数据生成建议。" if lang == "zh" else "Tiada data untuk cadangan."
+    
+    latest_data = student_data[student_data["考试"] == latest_exam]
+    if latest_data.empty:
+        return "暂无数据生成建议。" if lang == "zh" else "Tiada data untuk cadangan."
+    
+    latest_data = latest_data.iloc[0]
     
     scores = {}
     for subject in subjects:
@@ -543,7 +556,7 @@ def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
         return code
     
     if lang == "zh":
-        advice = f"""
+        return f"""
 📊 **总体评价**：本次考试平均分 {avg_score:.1f} 分，{'表现优秀' if avg_score >= 80 else '表现良好' if avg_score >= 70 else '有提升空间'}。
 
 🌟 **优势科目**：{', '.join([get_subject_name(c) for c in strengths]) if strengths else '暂无明显优势科目'}，请继续保持！
@@ -557,7 +570,7 @@ def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
 • 保持良好作息，提高效率
 """
     else:
-        advice = f"""
+        return f"""
 📊 **Penilaian Keseluruhan**: Purata markah {avg_score:.1f}, {'cemerlang' if avg_score >= 80 else 'baik' if avg_score >= 70 else 'perlu penambahbaikan'}.
 
 🌟 **Subjek Kekuatan**: {', '.join([get_subject_name(c) for c in strengths]) if strengths else 'Tiada subjek kekuatan yang ketara'}.
@@ -570,18 +583,17 @@ def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
 • Bentuk kumpulan belajar
 • Kekalkan rutin tidur yang baik
 """
-    
-    return advice
 
 def get_subject_list(level, filter_type, lang):
     """获取科目列表"""
     config = SUBJECTS_CONFIG[level]
     
     if filter_type == "core_only":
-        subjects = config["core"]
+        subjects = config["core"].copy()
     else:
-        subjects = config["core"] + config["elective"]
+        subjects = config["core"].copy() + config["elective"].copy()
     
+    # 为每个科目添加 display 属性
     for s in subjects:
         s["display"] = s["name_zh"] if lang == "zh" else s["name_ms"]
     
@@ -594,14 +606,55 @@ def parse_uploaded_file(uploaded_file):
     else:
         return pd.read_excel(uploaded_file, engine='openpyxl')
 
-# ========== 设置页面 ==========
+# ========== 班级设置页面 ==========
+def show_class_settings_page(supabase, lang, t, classes, is_principal):
+    """显示班级设置页面"""
+    st.header(t["class_settings"])
+    
+    if is_principal:
+        class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c for c in classes}
+        selected_name = st.selectbox(t["select_class"], list(class_options.keys()))
+        selected_class = class_options[selected_name]
+    else:
+        selected_class = next((c for c in classes if c["id"] == st.session_state.class_id), None)
+        if selected_class:
+            st.info(f"当前班级: {selected_class['name_zh'] if lang == 'zh' else selected_class['name_ms']}")
+    
+    if selected_class:
+        st.subheader(t["edit_teacher"])
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            teacher_zh = st.text_input(
+                t["teacher_name_zh"],
+                value=selected_class["teacher_zh"],
+                key="teacher_zh_input"
+            )
+        with col2:
+            teacher_ms = st.text_input(
+                t["teacher_name_ms"],
+                value=selected_class["teacher_ms"],
+                key="teacher_ms_input"
+            )
+        
+        if st.button(t["save_teacher"], type="primary"):
+            if update_class_teacher(supabase, selected_class["id"], teacher_zh, teacher_ms):
+                st.success(t["teacher_updated"])
+                st.rerun()
+        
+        st.markdown("---")
+        st.subheader("📋 当前班级信息")
+        st.write(f"**班级**: {selected_class['name_zh']} / {selected_class['name_ms']}")
+        st.write(f"**年级**: {selected_class['grade']}")
+        st.write(f"**班主任**: {selected_class['teacher_zh']} / {selected_class['teacher_ms']}")
+
+# ========== 系统设置页面 ==========
 def show_settings_page(supabase, lang, t):
-    """显示设置页面"""
+    """显示系统设置页面"""
     st.header(t["settings"])
     
     class_id = st.session_state.class_id
     
-    # 获取当前设置
     try:
         response = supabase.table("school_settings").select("*").eq("class_id", class_id).execute()
         settings = response.data[0] if response.data else {}
@@ -612,11 +665,11 @@ def show_settings_page(supabase, lang, t):
     col1, col2 = st.columns(2)
     
     with col1:
-        school_name_zh = st.text_input("学校名称 (中文)", value=settings.get("school_name_zh", "学校名称"))
-        academic_year = st.text_input("当前学年", value=settings.get("current_academic_year", "2026"))
+        school_name_zh = st.text_input("学校名称 (中文)", value=settings.get("school_name_zh", "SJKHK"))
+        academic_year = st.text_input(t["academic_year"], value=settings.get("current_academic_year", "2026"))
     
     with col2:
-        school_name_ms = st.text_input("Nama Sekolah (BM)", value=settings.get("school_name_ms", "Sekolah Saya"))
+        school_name_ms = st.text_input("Nama Sekolah (BM)", value=settings.get("school_name_ms", "SJKHK"))
         school_logo_url = st.text_input("校徽图片URL (可选)", value=settings.get("school_logo_url", ""))
     
     st.subheader("📝 考试设置")
@@ -627,10 +680,6 @@ def show_settings_page(supabase, lang, t):
     with col2:
         exam_name_suffix = st.text_input("考试名称后缀 (如: 2026)", value=settings.get("exam_name_suffix", academic_year))
     
-    if exam_name_prefix or exam_name_suffix:
-        st.info(f"📌 考试名称示例: {exam_name_prefix}{exam_name_suffix}")
-    
-    # 保存按钮
     if st.button(t["save_settings"], type="primary", use_container_width=True):
         try:
             data = {
@@ -653,21 +702,6 @@ def show_settings_page(supabase, lang, t):
             st.rerun()
         except Exception as e:
             st.error(f"保存失败: {e}")
-    
-    # 显示当前配置
-    st.markdown("---")
-    st.subheader("📊 当前配置预览")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"**学校名称**: {school_name_zh}")
-        st.markdown(f"**当前学年**: {academic_year}")
-        st.markdown(f"**考试前缀**: {exam_name_prefix if exam_name_prefix else '(未设置)'}")
-    with col2:
-        st.markdown(f"**Nama Sekolah**: {school_name_ms}")
-        st.markdown(f"**考试后缀**: {exam_name_suffix if exam_name_suffix else '(使用学年)'}")
-    
-    st.info("💡 提示：考试成绩导入时，考试名称会自动使用「考试名称前缀 + 考试名称后缀」的格式")
 
 # ========== 登录页面 ==========
 def login_page(supabase):
@@ -696,44 +730,93 @@ def login_page(supabase):
         return
     
     with st.form("login_form"):
-        class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c for c in classes}
-        selected_name = st.selectbox(t["select_class"], list(class_options.keys()))
-        password = st.text_input(t["password"], type="password")
+        login_mode = st.radio(
+            "登录模式" if lang == "zh" else "Mod Log Masuk",
+            [t["teacher_mode"], t["principal_mode"]],
+            horizontal=True
+        )
         
-        if st.form_submit_button(t["login_btn"], type="primary", use_container_width=True):
-            class_data = class_options[selected_name]
+        if login_mode == t["teacher_mode"]:
+            class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c for c in classes}
+            selected_name = st.selectbox(t["select_class"], list(class_options.keys()))
+            password = st.text_input(t["password"], type="password")
             
-            if class_data["password"] == password:
-                st.session_state.authenticated = True
-                st.session_state.class_id = class_data["id"]
-                st.session_state.class_name_zh = class_data["name_zh"]
-                st.session_state.class_name_ms = class_data["name_ms"]
-                st.session_state.teacher_zh = class_data["teacher_zh"]
-                st.session_state.teacher_ms = class_data["teacher_ms"]
-                st.session_state.level = class_data["level"]
-                st.session_state.grade = class_data["grade"]
-                st.rerun()
-            else:
-                st.error(t["wrong_password"])
+            if st.form_submit_button(t["login_btn"], type="primary", use_container_width=True):
+                class_data = class_options[selected_name]
+                
+                if class_data["password"] == password:
+                    st.session_state.authenticated = True
+                    st.session_state.is_principal = False
+                    st.session_state.class_id = class_data["id"]
+                    st.session_state.class_name_zh = class_data["name_zh"]
+                    st.session_state.class_name_ms = class_data["name_ms"]
+                    st.session_state.teacher_zh = class_data["teacher_zh"]
+                    st.session_state.teacher_ms = class_data["teacher_ms"]
+                    st.session_state.level = class_data["level"]
+                    st.session_state.grade = class_data["grade"]
+                    st.rerun()
+                else:
+                    st.error(t["wrong_password"])
+        else:
+            password = st.text_input(t["password"], type="password")
+            
+            if st.form_submit_button(t["login_btn"], type="primary", use_container_width=True):
+                if password == PRINCIPAL_PASSWORD:
+                    st.session_state.authenticated = True
+                    st.session_state.is_principal = True
+                    st.session_state.class_id = classes[0]["id"]
+                    st.session_state.class_name_zh = "校领导模式"
+                    st.session_state.class_name_ms = "Mod Pentadbir"
+                    st.session_state.teacher_zh = "校领导"
+                    st.session_state.teacher_ms = "Pentadbir"
+                    st.session_state.level = classes[0]["level"]
+                    st.session_state.grade = classes[0]["grade"]
+                    st.rerun()
+                else:
+                    st.error(t["wrong_password"])
 
 # ========== 主应用 ==========
 def main_app(supabase):
     lang = st.session_state.get("language", "zh")
     t = TEXTS[lang]
     
-    # 侧边栏
-    if lang == "zh":
-        st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_zh}")
-        st.sidebar.markdown(f"**班主任**：{st.session_state.teacher_zh}")
-        st.sidebar.markdown(f"**年级**：{st.session_state.grade}年级")
+    all_classes = get_classes(supabase)
+    
+    # 校领导模式：可以切换班级
+    if st.session_state.is_principal:
+        st.sidebar.title("👨‍💼 " + (t["principal_mode"] if lang == "zh" else "Mod Pentadbir"))
+        
+        class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c for c in all_classes}
+        selected_class_name = st.sidebar.selectbox(
+            t["switch_class"],
+            list(class_options.keys()),
+            key="class_selector"
+        )
+        selected_class = class_options[selected_class_name]
+        
+        st.session_state.class_id = selected_class["id"]
+        st.session_state.class_name_zh = selected_class["name_zh"]
+        st.session_state.class_name_ms = selected_class["name_ms"]
+        st.session_state.teacher_zh = selected_class["teacher_zh"]
+        st.session_state.teacher_ms = selected_class["teacher_ms"]
+        st.session_state.level = selected_class["level"]
+        st.session_state.grade = selected_class["grade"]
+        
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(f"**当前班级**: {selected_class['name_zh']} / {selected_class['name_ms']}")
+        st.sidebar.markdown(f"**班主任**: {selected_class['teacher_zh']} / {selected_class['teacher_ms']}")
     else:
-        st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_ms}")
-        st.sidebar.markdown(f"**Guru Kelas**：{st.session_state.teacher_ms}")
-        st.sidebar.markdown(f"**Tahun**：{st.session_state.grade}")
+        if lang == "zh":
+            st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_zh}")
+            st.sidebar.markdown(f"**班主任**：{st.session_state.teacher_zh}")
+            st.sidebar.markdown(f"**年级**：{st.session_state.grade}年级")
+        else:
+            st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_ms}")
+            st.sidebar.markdown(f"**Guru Kelas**：{st.session_state.teacher_ms}")
+            st.sidebar.markdown(f"**Tahun**：{st.session_state.grade}")
     
     st.sidebar.markdown("---")
     
-    # 语言切换
     col1, col2 = st.sidebar.columns(2)
     with col1:
         if st.button("🇨🇳 中文", use_container_width=True):
@@ -746,7 +829,6 @@ def main_app(supabase):
     
     st.sidebar.markdown("---")
     
-    # 科目筛选
     subject_filter = st.sidebar.radio(
         t["subject_display"],
         [t["core_only"], t["all_subjects"]],
@@ -754,24 +836,28 @@ def main_app(supabase):
     )
     filter_type = "core_only" if subject_filter == t["core_only"] else "all_subjects"
     
-    # 菜单
+    if st.session_state.is_principal:
+        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["class_settings"], t["settings"], t["help"]]
+    else:
+        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["settings"], t["help"]]
+    
     menu = st.sidebar.radio(
         "功能菜单" if lang == "zh" else "Menu",
-        [t["student_performance"], t["class_performance"], t["data_management"], t["settings"], t["help"]]
+        menu_options
     )
     
     if st.sidebar.button(t["logout"], use_container_width=True):
-        for key in ["authenticated", "class_id", "class_name_zh", "class_name_ms", "teacher_zh", "teacher_ms", "level", "grade"]:
+        keys = ["authenticated", "class_id", "class_name_zh", "class_name_ms", "teacher_zh", "teacher_ms", "level", "grade", "is_principal"]
+        for key in keys:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
     
-    # 加载数据
     students_df = get_students(supabase, st.session_state.class_id)
     exams = get_exams(supabase, st.session_state.class_id)
     subjects = get_subject_list(st.session_state.level, filter_type, lang)
     
-    # 学生个人成绩
+    # ========== 学生个人成绩 ==========
     if menu == t["student_performance"]:
         st.header(t["student_performance"])
         
@@ -837,6 +923,8 @@ def main_app(supabase):
                     fig = create_radar_chart(latest_data.to_dict(), class_avg, subjects, lang)
                     if fig:
                         st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("暂无雷达图数据" if lang == "zh" else "Tiada data untuk carta radar")
                     
                     st.subheader("📝 学习建议" if lang == "zh" else "📝 Cadangan")
                     advice = generate_rule_based_advice(df_student, subjects, latest_exam, lang)
@@ -868,7 +956,7 @@ def main_app(supabase):
                                 mime="text/html"
                             )
     
-    # 班级成绩分析
+    # ========== 班级成绩分析 ==========
     elif menu == t["class_performance"]:
         st.header(t["class_performance"])
         
@@ -914,7 +1002,10 @@ def main_app(supabase):
                         st.metric(t["pass_rate"], f"{pass_rate:.1f}%")
                 
                 fig = create_box_plot(class_df, subjects, selected_exam, lang)
-                st.plotly_chart(fig, use_container_width=True)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("暂无箱线图数据" if lang == "zh" else "Tiada data untuk carta kotak")
                 
                 st.subheader(t["ranking_table"])
                 if subject_codes:
@@ -923,7 +1014,7 @@ def main_app(supabase):
                     display_cols = ["学生"] + subject_codes + ["总分", "排名"]
                     st.dataframe(class_df[display_cols].sort_values("排名"), use_container_width=True)
     
-    # 成绩管理
+    # ========== 成绩管理 ==========
     elif menu == t["data_management"]:
         st.header(t["data_management"])
         
@@ -944,7 +1035,6 @@ def main_app(supabase):
                     st.error("文件必须包含「学号」和「姓名」列" if lang == "zh" else "Fail mesti mengandungi lajur '学号' dan '姓名'")
         
         with tab2:
-            # 获取设置
             try:
                 settings_response = supabase.table("school_settings").select("*").eq("class_id", st.session_state.class_id).execute()
                 settings = settings_response.data[0] if settings_response.data else {}
@@ -955,10 +1045,9 @@ def main_app(supabase):
             exam_name_suffix = settings.get("exam_name_suffix", settings.get("current_academic_year", "2026"))
             default_exam_name = f"{exam_name_prefix}{exam_name_suffix}" if exam_name_prefix else ""
             
-            exam_name = st.text_input(t["exam_name"], value=default_exam_name, placeholder="例如: 期末考试2026")
+            exam_name = st.text_input(t["exam_name"], value=default_exam_name)
             exam_date = st.date_input(t["exam_date"], datetime.now())
             
-            # 显示当前学年
             current_year = settings.get("current_academic_year", "2026")
             st.caption(f"当前学年: {current_year}")
             
@@ -998,16 +1087,32 @@ def main_app(supabase):
             else:
                 st.info(t["no_exams"])
     
-    # 系统设置
+    # ========== 班级设置 ==========
+    elif menu == t["class_settings"] and st.session_state.is_principal:
+        show_class_settings_page(supabase, lang, t, all_classes, True)
+    
+    # ========== 系统设置 ==========
     elif menu == t["settings"]:
         show_settings_page(supabase, lang, t)
     
-    # 帮助页面
+    # ========== 帮助页面 ==========
     else:
         st.header(t["help"])
         if lang == "zh":
             st.markdown("""
             ### 📌 使用说明
+            
+            **登录方式**
+            - **班主任登录**：使用班级密码登录，只能查看本班数据
+            - **校领导登录**：使用密码 SJKHK000，可以查看所有班级数据
+            
+            **班级密码**
+            - 一年级: SJKHK001
+            - 二年级: SJKHK002
+            - 三年级: SJKHK003
+            - 四年级: SJKHK004
+            - 五年级: SJKHK005
+            - 六年级: SJKHK006
             
             **1. 导入学生名单**
             - 文件需包含「学号」和「姓名」列
@@ -1016,23 +1121,31 @@ def main_app(supabase):
             **2. 导入考试成绩**
             - 文件需包含「学号」「姓名」和各科目列
             - 科目代码：BC, BM, BI, MT, SN, SEJ, PJPK, PSV, MUZIK, MORAL, RBT
-            - 分数范围：0-100
             
-            **3. 查看分析**
-            - 选择学生后可查看成绩趋势图、雷达图
-            - 可生成 HTML 报告下载
+            **3. 班主任信息管理**
+            - 校领导可以在「班级设置」中修改班主任姓名
+            - 支持中文和马来文双语
             
             **4. 系统设置**
-            - 可修改学校名称（中/马来文）
+            - 可修改学校名称
             - 可设置当前学年
             - 可自定义考试名称格式
-            
-            **5. 数据存储**
-            - 所有数据存储在 Supabase 云端数据库
             """)
         else:
             st.markdown("""
             ### 📌 Panduan Penggunaan
+            
+            **Cara Log Masuk**
+            - **Log Masuk Guru**: Guna kata laluan kelas, hanya lihat data kelas sendiri
+            - **Log Masuk Pentadbir**: Guna kata laluan SJKHK000, boleh lihat semua kelas
+            
+            **Kata Laluan Kelas**
+            - Tahun 1: SJKHK001
+            - Tahun 2: SJKHK002
+            - Tahun 3: SJKHK003
+            - Tahun 4: SJKHK004
+            - Tahun 5: SJKHK005
+            - Tahun 6: SJKHK006
             
             **1. Import Senarai Pelajar**
             - Fail mesti mengandungi lajur '学号' dan '姓名'
@@ -1042,17 +1155,14 @@ def main_app(supabase):
             - Fail mesti mengandungi '学号', '姓名' dan lajur subjek
             - Kod subjek: BC, BM, BI, MT, SN, SEJ, PJPK, PSV, MUZIK, MORAL, RBT
             
-            **3. Analisis**
-            - Pilih pelajar untuk lihat carta trend dan radar
-            - Hasilkan laporan HTML
+            **3. Pengurusan Maklumat Guru**
+            - Pentadbir boleh ubah nama guru di 'Tetapan Kelas'
+            - Sokongan dwibahasa Cina/Melayu
             
             **4. Tetapan Sistem**
-            - Ubah nama sekolah (Cina/Melayu)
+            - Ubah nama sekolah
             - Tetap tahun akademik semasa
             - Format nama peperiksaan boleh disesuaikan
-            
-            **5. Penyimpanan Data**
-            - Semua data disimpan di pangkalan data Supabase
             """)
 
 # ========== 运行入口 ==========
