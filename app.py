@@ -3,16 +3,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-import os
 import io
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_CENTER
 import numpy as np
 from supabase import create_client
+import os
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -48,8 +42,6 @@ TEXTS = {
         "stacked_bar": "堆叠图",
         "radar_chart": "雷达图",
         "box_plot": "箱线图",
-        "scatter_plot": "散点图",
-        "bubble_chart": "气泡图",
         "generate_report": "生成PDF报告",
         "download_report": "下载报告",
         "no_data": "暂无数据",
@@ -58,9 +50,30 @@ TEXTS = {
         "import_students": "导入学生名单",
         "import_grades": "导入考试成绩",
         "exam_name": "考试名称",
+        "exam_date": "考试日期",
         "file_upload": "上传文件",
         "success": "成功！",
         "error": "错误",
+        "student_no": "学号",
+        "student_name": "姓名",
+        "rank": "排名",
+        "total_score": "总分",
+        "average": "平均分",
+        "strength": "优势科目",
+        "weakness": "需要加强",
+        "suggestions": "学习建议",
+        "history_exams": "历史考试",
+        "delete": "删除",
+        "view": "查看",
+        "class_overview": "班级概况",
+        "student_count": "学生人数",
+        "class_avg": "全科平均分",
+        "highest_total": "最高总分",
+        "pass_rate": "及格率",
+        "score_distribution": "成绩分布",
+        "ranking_table": "成绩排名",
+        "generate_advice": "生成学习建议",
+        "export_report": "导出报告"
     },
     "ms": {
         "app_title": "Sistem Analisis Prestasi Kelas",
@@ -86,8 +99,6 @@ TEXTS = {
         "stacked_bar": "Carta Bertindan",
         "radar_chart": "Carta Radar",
         "box_plot": "Carta Kotak",
-        "scatter_plot": "Carta Serakan",
-        "bubble_chart": "Carta Gelembung",
         "generate_report": "Hasilkan Laporan PDF",
         "download_report": "Muat Turun Laporan",
         "no_data": "Tiada data",
@@ -96,9 +107,30 @@ TEXTS = {
         "import_students": "Import Senarai Pelajar",
         "import_grades": "Import Markah Peperiksaan",
         "exam_name": "Nama Peperiksaan",
+        "exam_date": "Tarikh Peperiksaan",
         "file_upload": "Muat Naik Fail",
         "success": "Berjaya!",
         "error": "Ralat",
+        "student_no": "No. Pelajar",
+        "student_name": "Nama",
+        "rank": "Kedudukan",
+        "total_score": "Jumlah Markah",
+        "average": "Purata",
+        "strength": "Subjek Kekuatan",
+        "weakness": "Perlu Diperbaiki",
+        "suggestions": "Cadangan",
+        "history_exams": "Peperiksaan Lepas",
+        "delete": "Padam",
+        "view": "Lihat",
+        "class_overview": "Gambaran Kelas",
+        "student_count": "Bilangan Pelajar",
+        "class_avg": "Purata Keseluruhan",
+        "highest_total": "Jumlah Tertinggi",
+        "pass_rate": "Kadar Lulus",
+        "score_distribution": "Taburan Markah",
+        "ranking_table": "Kedudukan Markah",
+        "generate_advice": "Hasilkan Cadangan",
+        "export_report": "Eksport Laporan"
     }
 }
 
@@ -113,7 +145,7 @@ SUBJECTS_CONFIG = {
             {"code": "SN", "name_zh": "科学", "name_ms": "Sains"}
         ],
         "elective": [
-            {"code": "PJPK", "name_zh": "体育＆体健", "name_ms": "PJPK"},
+            {"code": "PJPK", "name_zh": "体育与体健", "name_ms": "PJPK"},
             {"code": "PSV", "name_zh": "美术", "name_ms": "PSV"},
             {"code": "MUZIK", "name_zh": "音乐", "name_ms": "Muzik"},
             {"code": "MORAL", "name_zh": "道德", "name_ms": "Moral"}
@@ -129,7 +161,7 @@ SUBJECTS_CONFIG = {
             {"code": "SEJ", "name_zh": "历史", "name_ms": "Sejarah"}
         ],
         "elective": [
-            {"code": "PJPK", "name_zh": "体育＆体健", "name_ms": "PJPK"},
+            {"code": "PJPK", "name_zh": "体育与体健", "name_ms": "PJPK"},
             {"code": "PSV", "name_zh": "美术", "name_ms": "PSV"},
             {"code": "MUZIK", "name_zh": "音乐", "name_ms": "Muzik"},
             {"code": "MORAL", "name_zh": "道德", "name_ms": "Moral"},
@@ -138,16 +170,41 @@ SUBJECTS_CONFIG = {
     }
 }
 
-# ========== 初始化 Supabase 客户端 ==========
+# ========== 初始化 Session State ==========
+def init_session_state():
+    """初始化 session state"""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    if "language" not in st.session_state:
+        st.session_state.language = "zh"
+    if "class_id" not in st.session_state:
+        st.session_state.class_id = None
+    if "class_name_zh" not in st.session_state:
+        st.session_state.class_name_zh = None
+    if "class_name_ms" not in st.session_state:
+        st.session_state.class_name_ms = None
+    if "teacher_zh" not in st.session_state:
+        st.session_state.teacher_zh = None
+    if "teacher_ms" not in st.session_state:
+        st.session_state.teacher_ms = None
+    if "level" not in st.session_state:
+        st.session_state.level = None
+    if "grade" not in st.session_state:
+        st.session_state.grade = None
+
+# ========== Supabase 连接 ==========
+@st.cache_resource
 def init_supabase():
-    """初始化 Supabase 客户端"""
+    """初始化 Supabase 客户端（使用缓存）"""
     try:
-        supabase_url = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
-        supabase_key = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
+        supabase_url = st.secrets.get("SUPABASE_URL", "")
+        supabase_key = st.secrets.get("SUPABASE_KEY", "")
         
-        if supabase_url and supabase_key:
-            return create_client(supabase_url, supabase_key)
-        return None
+        if not supabase_url or not supabase_key:
+            st.error("⚠️ 请配置 Supabase 连接信息\n\n在 Streamlit Cloud 的 Secrets 中添加：\nSUPABASE_URL\nSUPABASE_KEY")
+            return None
+        
+        return create_client(supabase_url, supabase_key)
     except Exception as e:
         st.error(f"Supabase 连接失败: {e}")
         return None
@@ -157,7 +214,7 @@ def get_classes(supabase):
     """获取所有班级"""
     try:
         response = supabase.table("classes").select("*").execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         st.error(f"获取班级失败: {e}")
         return []
@@ -193,7 +250,7 @@ def get_exams(supabase, class_id):
     """获取考试列表"""
     try:
         response = supabase.table("exams").select("*").eq("class_id", class_id).order("exam_date").execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         st.error(f"获取考试列表失败: {e}")
         return []
@@ -204,7 +261,7 @@ def add_exam(supabase, class_id, exam_name, exam_date):
         response = supabase.table("exams").insert({
             "class_id": class_id,
             "exam_name": exam_name,
-            "exam_date": exam_date,
+            "exam_date": exam_date.isoformat(),
             "academic_year": str(datetime.now().year)
         }).execute()
         return response.data[0]["id"] if response.data else None
@@ -216,7 +273,7 @@ def get_grades(supabase, exam_id):
     """获取考试成绩"""
     try:
         response = supabase.table("grades").select("*, students(*)").eq("exam_id", exam_id).execute()
-        return response.data
+        return response.data if response.data else []
     except Exception as e:
         st.error(f"获取成绩失败: {e}")
         return []
@@ -234,7 +291,10 @@ def save_grades(supabase, exam_id, grades_df):
             scores = {}
             for col in grades_df.columns:
                 if col not in ["学号", "姓名", "student_id"]:
-                    scores[col] = float(row[col]) if pd.notna(row[col]) else None
+                    try:
+                        scores[col] = float(row[col]) if pd.notna(row[col]) else None
+                    except:
+                        scores[col] = None
             
             records.append({
                 "exam_id": exam_id,
@@ -247,6 +307,16 @@ def save_grades(supabase, exam_id, grades_df):
         return True
     except Exception as e:
         st.error(f"保存成绩失败: {e}")
+        return False
+
+def delete_exam(supabase, exam_id):
+    """删除考试"""
+    try:
+        supabase.table("grades").delete().eq("exam_id", exam_id).execute()
+        supabase.table("exams").delete().eq("id", exam_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"删除考试失败: {e}")
         return False
 
 # ========== 图表生成函数 ==========
@@ -317,10 +387,13 @@ def create_radar_chart(student_scores, class_avg, subjects, lang):
     
     for subject in subjects:
         code = subject["code"]
-        if code in student_scores:
-            student_values.append(student_scores[code])
-            class_values.append(class_avg.get(code, 0))
+        if code in student_scores and student_scores[code]:
+            student_values.append(float(student_scores[code]))
+            class_values.append(float(class_avg.get(code, 0)))
             labels.append(subject["name_zh"] if lang == "zh" else subject["name_ms"])
+    
+    if not student_values:
+        return None
     
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
@@ -365,34 +438,35 @@ def create_box_plot(class_df, subjects, exam_name, lang):
     )
     return fig
 
-# ========== PDF 报告生成 ==========
-def generate_pdf_report(student_name, student_data, exams, subjects, class_avg_data, lang):
-    """生成 PDF 报告"""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
+# ========== PDF 报告生成（简化版，避免 reportlab 依赖问题）==========
+def generate_simple_report(student_name, student_data, exams, subjects, class_avg_data, lang):
+    """生成简单的 HTML 报告（避免 reportlab 依赖）"""
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{student_name} - 成绩报告</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            h1 {{ color: #333; text-align: center; }}
+            h2 {{ color: #666; margin-top: 30px; }}
+            table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+            th, td {{ border: 1px solid #ddd; padding: 12px; text-align: center; }}
+            th {{ background-color: #4CAF50; color: white; }}
+            .advice {{ background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin-top: 30px; }}
+        </style>
+    </head>
+    <body>
+        <h1>{student_name} - 成绩分析报告</h1>
+        <p style="text-align:center">生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+    """
     
-    # 标题
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=20,
-        alignment=TA_CENTER,
-        spaceAfter=30
-    )
-    title = f"{student_name} 成绩报告" if lang == "zh" else f"Laporan Prestasi {student_name}"
-    story.append(Paragraph(title, title_style))
-    story.append(Spacer(1, 20))
-    
-    # 成绩表格
     for exam in exams:
         exam_data = student_data[student_data["考试"] == exam]
         if not exam_data.empty:
-            story.append(Paragraph(f"<b>{exam}</b>", styles['Heading2']))
-            
-            # 表格数据
-            table_data = [["科目", "成绩", "班级平均", "差距"]] if lang == "zh" else [["Subjek", "Markah", "Purata", "Beza"]]
+            html_content += f"<h2>{exam}</h2>"
+            html_content += "<table><tr><th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th></tr>"
             
             for subject in subjects:
                 code = subject["code"]
@@ -400,28 +474,25 @@ def generate_pdf_report(student_name, student_data, exams, subjects, class_avg_d
                     score = exam_data[code].iloc[0]
                     avg = class_avg_data[exam].get(code, 0)
                     diff = score - avg
-                    diff_text = f"+{diff:.1f}" if diff >= 0 else f"{diff:.1f}"
+                    diff_class = "positive" if diff >= 0 else "negative"
+                    diff_color = "green" if diff >= 0 else "red"
                     name = subject["name_zh"] if lang == "zh" else subject["name_ms"]
-                    table_data.append([name, f"{score:.1f}", f"{avg:.1f}", diff_text])
+                    html_content += f"<tr><td>{name}</td><td>{score:.1f}</td><td>{avg:.1f}</td><td style='color:{diff_color}'>{diff:+.1f}</td></tr>"
             
-            table = Table(table_data, colWidths=[120, 80, 80, 80])
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            story.append(table)
-            story.append(Spacer(1, 20))
+            html_content += "</table>"
     
     # 学习建议
     advice = generate_rule_based_advice(student_data, subjects, exams[-1], lang)
-    story.append(Paragraph("<b>学习建议</b>" if lang == "zh" else "<b>Cadangan Pembelajaran</b>", styles['Heading2']))
-    story.append(Paragraph(advice.replace('\n', '<br/>'), styles['Normal']))
+    html_content += f"""
+        <div class="advice">
+            <h3>📝 学习建议</h3>
+            {advice.replace('\n', '<br>')}
+        </div>
+    </body>
+    </html>
+    """
     
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+    return html_content
 
 def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
     """基于规则生成学习建议"""
@@ -431,7 +502,7 @@ def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
     scores = {}
     for subject in subjects:
         code = subject["code"]
-        if code in latest_data:
+        if code in latest_data and pd.notna(latest_data[code]):
             scores[code] = latest_data[code]
     
     if not scores:
@@ -503,54 +574,54 @@ def parse_uploaded_file(uploaded_file):
     if uploaded_file.name.endswith('.csv'):
         return pd.read_csv(uploaded_file)
     else:
-        return pd.read_excel(uploaded_file)
+        return pd.read_excel(uploaded_file, engine='openpyxl')
 
 # ========== 登录页面 ==========
 def login_page(supabase):
     lang = st.session_state.get("language", "zh")
     t = TEXTS[lang]
     
+    # 标题
     st.title(t["app_title"])
     st.markdown("---")
     
     # 语言切换
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
-        if st.button("🇨🇳 中文"):
+        if st.button("🇨🇳 中文", use_container_width=True):
             st.session_state.language = "zh"
             st.rerun()
     with col2:
-        if st.button("🇲🇾 Bahasa Melayu"):
+        if st.button("🇲🇾 Bahasa Melayu", use_container_width=True):
             st.session_state.language = "ms"
             st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # 登录表单
     classes = get_classes(supabase)
     
     if not classes:
-        st.error("暂无班级数据，请先在 Supabase 中创建班级记录" if lang == "zh" else "Tiada data kelas, sila buat rekod kelas di Supabase")
+        st.warning("⚠️ 暂无班级数据\n\n请在 Supabase 数据库中创建班级记录。\n\n参考 SQL: INSERT INTO classes ...")
         return
     
     with st.form("login_form"):
-        class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c["class_code"] for c in classes}
+        class_options = {c["name_zh"] if lang == "zh" else c["name_ms"]: c for c in classes}
         selected_name = st.selectbox(t["select_class"], list(class_options.keys()))
         password = st.text_input(t["password"], type="password")
         
         if st.form_submit_button(t["login_btn"], type="primary", use_container_width=True):
-            class_code = class_options[selected_name]
-            # 查找班级
-            class_data = next((c for c in classes if c["class_code"] == class_code), None)
+            class_data = class_options[selected_name]
             
-            if class_data and class_data["password"] == password:
+            if class_data["password"] == password:
                 st.session_state.authenticated = True
                 st.session_state.class_id = class_data["id"]
-                st.session_state.class_code = class_data["class_code"]
                 st.session_state.class_name_zh = class_data["name_zh"]
                 st.session_state.class_name_ms = class_data["name_ms"]
-                st.session_state.level = class_data["level"]
-                st.session_state.grade = class_data["grade"]
                 st.session_state.teacher_zh = class_data["teacher_zh"]
                 st.session_state.teacher_ms = class_data["teacher_ms"]
+                st.session_state.level = class_data["level"]
+                st.session_state.grade = class_data["grade"]
                 st.rerun()
             else:
                 st.error(t["wrong_password"])
@@ -563,21 +634,23 @@ def main_app(supabase):
     # 侧边栏
     if lang == "zh":
         st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_zh}")
-        st.sidebar.markdown(f"班主任：{st.session_state.teacher_zh}")
-        st.sidebar.markdown(f"年级：{st.session_state.grade}年级")
+        st.sidebar.markdown(f"**班主任**：{st.session_state.teacher_zh}")
+        st.sidebar.markdown(f"**年级**：{st.session_state.grade}年级")
     else:
         st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_ms}")
-        st.sidebar.markdown(f"Guru Kelas：{st.session_state.teacher_ms}")
-        st.sidebar.markdown(f"Tahun：{st.session_state.grade}")
+        st.sidebar.markdown(f"**Guru Kelas**：{st.session_state.teacher_ms}")
+        st.sidebar.markdown(f"**Tahun**：{st.session_state.grade}")
+    
+    st.sidebar.markdown("---")
     
     # 语言切换
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        if st.button("🇨🇳 中文"):
+        if st.button("🇨🇳 中文", use_container_width=True):
             st.session_state.language = "zh"
             st.rerun()
     with col2:
-        if st.button("🇲🇾 BM"):
+        if st.button("🇲🇾 BM", use_container_width=True):
             st.session_state.language = "ms"
             st.rerun()
     
@@ -598,7 +671,9 @@ def main_app(supabase):
     )
     
     if st.sidebar.button(t["logout"], use_container_width=True):
-        st.session_state.authenticated = False
+        for key in ["authenticated", "class_id", "class_name_zh", "class_name_ms", "teacher_zh", "teacher_ms", "level", "grade"]:
+            if key in st.session_state:
+                del st.session_state[key]
         st.rerun()
     
     # 加载数据
@@ -606,7 +681,7 @@ def main_app(supabase):
     exams = get_exams(supabase, st.session_state.class_id)
     subjects = get_subject_list(st.session_state.level, filter_type, lang)
     
-    # 学生个人成绩
+    # ========== 学生个人成绩 ==========
     if menu == t["student_performance"]:
         st.header(t["student_performance"])
         
@@ -637,16 +712,17 @@ def main_app(supabase):
                     if student_grade:
                         record = {"考试": exam["exam_name"]}
                         scores = student_grade["scores"]
-                        for subject in subjects:
-                            if subject["code"] in scores:
-                                record[subject["code"]] = scores[subject["code"]]
+                        if scores:
+                            for code, score in scores.items():
+                                if score is not None:
+                                    record[code] = score
                         student_data.append(record)
             
             if student_data:
                 df_student = pd.DataFrame(student_data)
                 
                 # 图表类型
-                chart_options = [t["line_chart"], t["bar_chart"], t["radar_chart"]]
+                chart_options = [t["line_chart"], t["bar_chart"]]
                 chart_type = st.selectbox(t["chart_type"], chart_options)
                 
                 tab1, tab2, tab3 = st.tabs(["📈 成绩图表", "🎯 雷达对比", "📄 报告导出"] if lang == "zh" else ["📈 Carta", "🎯 Radar", "📄 Laporan"])
@@ -654,26 +730,8 @@ def main_app(supabase):
                 with tab1:
                     if chart_type == t["line_chart"]:
                         fig = create_line_chart(df_student, selected_exams, subjects, lang)
-                    elif chart_type == t["bar_chart"]:
-                        fig = create_bar_chart(df_student, selected_exams, subjects, lang)
                     else:
-                        # 雷达图需要最新一次考试的数据
-                        latest_exam = selected_exams[-1]
-                        latest_data = df_student[df_student["考试"] == latest_exam].iloc[0]
-                        # 获取班级平均
-                        exam_record = next(e for e in exams if e["exam_name"] == latest_exam)
-                        grades = get_grades(supabase, exam_record["id"])
-                        class_avg = {}
-                        for g in grades:
-                            for code, score in g["scores"].items():
-                                if code not in class_avg:
-                                    class_avg[code] = []
-                                if score:
-                                    class_avg[code].append(score)
-                        class_avg = {k: np.mean(v) for k, v in class_avg.items()}
-                        
-                        fig = create_radar_chart(latest_data.to_dict(), class_avg, subjects, lang)
-                    
+                        fig = create_bar_chart(df_student, selected_exams, subjects, lang)
                     st.plotly_chart(fig, use_container_width=True)
                 
                 with tab2:
@@ -685,15 +743,19 @@ def main_app(supabase):
                     
                     class_avg = {}
                     for g in grades:
-                        for code, score in g["scores"].items():
-                            if code not in class_avg:
-                                class_avg[code] = []
-                            if score:
-                                class_avg[code].append(score)
+                        if g["scores"]:
+                            for code, score in g["scores"].items():
+                                if score is not None:
+                                    if code not in class_avg:
+                                        class_avg[code] = []
+                                    class_avg[code].append(score)
                     class_avg = {k: np.mean(v) for k, v in class_avg.items()}
                     
                     fig = create_radar_chart(latest_data.to_dict(), class_avg, subjects, lang)
-                    st.plotly_chart(fig, use_container_width=True)
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("暂无雷达图数据" if lang == "zh" else "Tiada data untuk carta radar")
                     
                     # 学习建议
                     st.subheader("📝 学习建议" if lang == "zh" else "📝 Cadangan")
@@ -710,23 +772,24 @@ def main_app(supabase):
                                 grades = get_grades(supabase, exam_record["id"])
                                 class_avg = {}
                                 for g in grades:
-                                    for code, score in g["scores"].items():
-                                        if code not in class_avg:
-                                            class_avg[code] = []
-                                        if score:
-                                            class_avg[code].append(score)
+                                    if g["scores"]:
+                                        for code, score in g["scores"].items():
+                                            if score is not None:
+                                                if code not in class_avg:
+                                                    class_avg[code] = []
+                                                class_avg[code].append(score)
                                 class_avg_data[exam_name] = {k: np.mean(v) for k, v in class_avg.items()}
                             
-                            pdf_buffer = generate_pdf_report(student_name, df_student, selected_exams, subjects, class_avg_data, lang)
+                            html_report = generate_simple_report(student_name, df_student, selected_exams, subjects, class_avg_data, lang)
                             
                             st.download_button(
                                 label=t["download_report"],
-                                data=pdf_buffer,
-                                file_name=f"{student_name}_成绩报告_{datetime.now().strftime('%Y%m%d')}.pdf" if lang == "zh" else f"{student_name}_Laporan_{datetime.now().strftime('%Y%m%d')}.pdf",
-                                mime="application/pdf"
+                                data=html_report,
+                                file_name=f"{student_name}_成绩报告_{datetime.now().strftime('%Y%m%d')}.html",
+                                mime="text/html"
                             )
     
-    # 班级成绩分析
+    # ========== 班级成绩分析 ==========
     elif menu == t["class_performance"]:
         st.header(t["class_performance"])
         
@@ -745,8 +808,10 @@ def main_app(supabase):
             class_data = []
             for g in grades:
                 row = {"student_id": g["student_id"], "学生": g["students"]["name_zh"]}
-                for code, score in g["scores"].items():
-                    row[code] = score
+                if g["scores"]:
+                    for code, score in g["scores"].items():
+                        if score is not None:
+                            row[code] = score
                 class_data.append(row)
             
             class_df = pd.DataFrame(class_data)
@@ -756,26 +821,26 @@ def main_app(supabase):
             subject_codes = [s["code"] for s in subjects if s["code"] in class_df.columns]
             
             with col1:
-                st.metric("学生人数" if lang == "zh" else "Bilangan Pelajar", len(class_df))
+                st.metric(t["student_count"], len(class_df))
             with col2:
                 if subject_codes:
                     avg = class_df[subject_codes].mean().mean()
-                    st.metric("全科平均分" if lang == "zh" else "Purata Keseluruhan", f"{avg:.1f}")
+                    st.metric(t["class_avg"], f"{avg:.1f}")
             with col3:
                 if subject_codes:
                     total = class_df[subject_codes].sum(axis=1)
-                    st.metric("最高总分" if lang == "zh" else "Jumlah Tertinggi", total.max())
+                    st.metric(t["highest_total"], total.max())
             with col4:
                 if subject_codes:
                     pass_rate = (class_df[subject_codes] >= 60).all(axis=1).mean() * 100
-                    st.metric("及格率" if lang == "zh" else "Kadar Lulus", f"{pass_rate:.1f}%")
+                    st.metric(t["pass_rate"], f"{pass_rate:.1f}%")
             
             # 箱线图
             fig = create_box_plot(class_df, subjects, selected_exam, lang)
             st.plotly_chart(fig, use_container_width=True)
             
             # 排名表
-            st.subheader("成绩排名" if lang == "zh" else "Kedudukan Markah")
+            st.subheader(t["ranking_table"])
             if subject_codes:
                 class_df["总分"] = class_df[subject_codes].sum(axis=1)
                 class_df["排名"] = class_df["总分"].rank(ascending=False, method='min').astype(int)
@@ -783,11 +848,11 @@ def main_app(supabase):
                 display_cols = ["学生"] + subject_codes + ["总分", "排名"]
                 st.dataframe(class_df[display_cols].sort_values("排名"), use_container_width=True)
     
-    # 成绩管理
+    # ========== 成绩管理 ==========
     elif menu == t["data_management"]:
         st.header(t["data_management"])
         
-        tab1, tab2, tab3 = st.tabs(["学生名单", "导入成绩", "历史考试"] if lang == "zh" else ["Senarai Pelajar", "Import Markah", "Peperiksaan"])
+        tab1, tab2, tab3 = st.tabs([t["import_students"], t["import_grades"], t["history_exams"]])
         
         with tab1:
             if not students_df.empty:
@@ -805,7 +870,7 @@ def main_app(supabase):
         
         with tab2:
             exam_name = st.text_input(t["exam_name"])
-            exam_date = st.date_input("考试日期" if lang == "zh" else "Tarikh Peperiksaan", datetime.now())
+            exam_date = st.date_input(t["exam_date"], datetime.now())
             uploaded_file = st.file_uploader(t["import_grades"], type=['csv', 'xlsx'], key="grade_upload")
             
             if exam_name and uploaded_file:
@@ -819,7 +884,8 @@ def main_app(supabase):
                     df["student_id"] = df["学号"].astype(str).map(student_map)
                     
                     if df["student_id"].isna().any():
-                        st.error("部分学号未在学生名单中找到" if lang == "zh" else "Sebahagian nombor pelajar tidak ditemui")
+                        missing = df[df["student_id"].isna()]["学号"].tolist()
+                        st.error(f"以下学号未在学生名单中找到: {missing}" if lang == "zh" else f"Nombor pelajar berikut tidak ditemui: {missing}")
                     else:
                         # 添加考试
                         exam_id = add_exam(supabase, st.session_state.class_id, exam_name, exam_date)
@@ -837,14 +903,14 @@ def main_app(supabase):
                     with col1:
                         st.write(f"📄 {exam['exam_name']} - {exam['exam_date']}")
                     with col2:
-                        if st.button("删除" if lang == "zh" else "Padam", key=f"del_{exam['id']}"):
-                            supabase.table("grades").delete().eq("exam_id", exam["id"]).execute()
-                            supabase.table("exams").delete().eq("id", exam["id"]).execute()
-                            st.rerun()
+                        if st.button(t["delete"], key=f"del_{exam['id']}"):
+                            if delete_exam(supabase, exam["id"]):
+                                st.success(t["success"])
+                                st.rerun()
             else:
                 st.info(t["no_exams"])
     
-    # 帮助页面
+    # ========== 帮助页面 ==========
     else:
         st.header(t["help"])
         if lang == "zh":
@@ -858,14 +924,19 @@ def main_app(supabase):
             **2. 导入考试成绩**
             - 文件需包含「学号」「姓名」和各科目列
             - 科目代码：BC(华文)、BM(国文)、BI(英文)、MT(数学)、SN(科学)、SEJ(历史)、PJPK(体育)、PSV(美术)、MUZIK(音乐)、MORAL(道德)、RBT(技术与工艺)
+            - 分数范围：0-100
             
             **3. 查看分析**
             - 选择学生后可查看成绩趋势图、雷达图
-            - 可生成 PDF 报告
+            - 可生成 HTML 报告下载
             
             **4. 数据存储**
-            - 所有数据存储在云端 Supabase 数据库
+            - 所有数据存储在 Supabase 云端数据库
             - 自动备份，安全可靠
+            
+            **5. 校徽上传**
+            - 校徽图片需上传到 Supabase Storage 或 CDN
+            - 在代码中配置 SCHOOL_LOGO_URL 环境变量
             """)
         else:
             st.markdown("""
@@ -881,7 +952,7 @@ def main_app(supabase):
             
             **3. Analisis**
             - Pilih pelajar untuk lihat carta trend dan radar
-            - Hasilkan laporan PDF
+            - Hasilkan laporan HTML
             
             **4. Penyimpanan Data**
             - Semua data disimpan di pangkalan data Supabase
@@ -890,18 +961,16 @@ def main_app(supabase):
 
 # ========== 运行入口 ==========
 if __name__ == "__main__":
-    # 初始化 session state
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-    if "language" not in st.session_state:
-        st.session_state.language = "zh"
+    # 初始化
+    init_session_state()
     
     # 连接 Supabase
     supabase = init_supabase()
     
     if not supabase:
-        st.error("无法连接到 Supabase，请检查环境变量配置")
-    elif not st.session_state.authenticated:
+        st.stop()
+    
+    if not st.session_state.authenticated:
         login_page(supabase)
     else:
         main_app(supabase)
