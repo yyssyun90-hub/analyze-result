@@ -1,6 +1,12 @@
-streamlit==1.31.0
-pandas==2.1.4
-plotly==5.18.0
-openpyxl==3.1.2
-numpy==1.26.2
-supabase==2.5.1
+# 本地修改
+echo "streamlit==1.28.0" > requirements.txt
+echo "pandas==2.0.3" >> requirements.txt
+echo "plotly==5.17.0" >> requirements.txt
+echo "openpyxl==3.1.2" >> requirements.txt
+echo "numpy==1.24.3" >> requirements.txt
+echo "supabase==1.2.0" >> requirements.txt
+
+# 提交
+git add requirements.txt
+git commit -m "Fix requirements"
+git push
