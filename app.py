@@ -1,49 +1,12 @@
-import sys
-import traceback
-
-# 调试信息
-print("=== Starting app ===")
-print(f"Python version: {sys.version}")
-
-# 尝试导入并捕获错误
-try:
-    import streamlit as st
-    print("✓ streamlit imported")
-except Exception as e:
-    print(f"✗ streamlit import failed: {e}")
-    raise
-
-try:
-    import pandas as pd
-    print("✓ pandas imported")
-except Exception as e:
-    print(f"✗ pandas import failed: {e}")
-    raise
-
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    print("✓ plotly imported")
-except Exception as e:
-    print(f"✗ plotly import failed: {e}")
-    traceback.print_exc()
-    st.error(f"plotly 导入失败: {e}")
-    st.stop()
-
-try:
-    from supabase import create_client
-    print("✓ supabase imported")
-except Exception as e:
-    print(f"✗ supabase import failed: {e}")
-    # supabase 不是必需的，如果没有就设为 None
-    create_client = None
-
-import numpy as np
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import io
+import numpy as np
+from supabase import create_client
 import os
-
-print("=== All imports successful ===")
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -66,6 +29,7 @@ TEXTS = {
         "student_performance": "📊 学生个人成绩",
         "class_performance": "📈 班级成绩分析",
         "data_management": "📁 成绩管理",
+        "settings": "⚙️ 系统设置",
         "help": "ℹ️ 帮助",
         "core_only": "仅主科",
         "all_subjects": "全部科目",
@@ -75,8 +39,6 @@ TEXTS = {
         "chart_type": "选择图表类型",
         "line_chart": "折线图",
         "bar_chart": "柱状图",
-        "heatmap": "热力图",
-        "stacked_bar": "堆叠图",
         "radar_chart": "雷达图",
         "box_plot": "箱线图",
         "generate_report": "生成报告",
@@ -110,7 +72,11 @@ TEXTS = {
         "score_distribution": "成绩分布",
         "ranking_table": "成绩排名",
         "generate_advice": "生成学习建议",
-        "export_report": "导出报告"
+        "export_report": "导出报告",
+        "school_name": "学校名称",
+        "academic_year": "学年",
+        "save_settings": "保存设置",
+        "settings_saved": "设置已保存！"
     },
     "ms": {
         "app_title": "Sistem Analisis Prestasi Kelas",
@@ -123,6 +89,7 @@ TEXTS = {
         "student_performance": "📊 Analisis Pelajar Individu",
         "class_performance": "📈 Analisis Prestasi Kelas",
         "data_management": "📁 Pengurusan Data",
+        "settings": "⚙️ Tetapan Sistem",
         "help": "ℹ️ Bantuan",
         "core_only": "Subjek Teras Sahaja",
         "all_subjects": "Semua Subjek",
@@ -132,8 +99,6 @@ TEXTS = {
         "chart_type": "Pilih Jenis Carta",
         "line_chart": "Carta Garisan",
         "bar_chart": "Carta Palang",
-        "heatmap": "Peta Haba",
-        "stacked_bar": "Carta Bertindan",
         "radar_chart": "Carta Radar",
         "box_plot": "Carta Kotak",
         "generate_report": "Hasilkan Laporan",
@@ -167,7 +132,11 @@ TEXTS = {
         "score_distribution": "Taburan Markah",
         "ranking_table": "Kedudukan Markah",
         "generate_advice": "Hasilkan Cadangan",
-        "export_report": "Eksport Laporan"
+        "export_report": "Eksport Laporan",
+        "school_name": "Nama Sekolah",
+        "academic_year": "Tahun Akademik",
+        "save_settings": "Simpan Tetapan",
+        "settings_saved": "Tetapan disimpan!"
     }
 }
 
@@ -241,10 +210,6 @@ def init_supabase():
             st.warning("⚠️ 请配置 Supabase 连接信息\n\n在 Streamlit Cloud 的 Secrets 中添加：\nSUPABASE_URL\nSUPABASE_KEY")
             return None
         
-        if create_client is None:
-            st.error("supabase 包未安装")
-            return None
-        
         return create_client(supabase_url, supabase_key)
     except Exception as e:
         st.error(f"Supabase 连接失败: {e}")
@@ -296,14 +261,14 @@ def get_exams(supabase, class_id):
         st.error(f"获取考试列表失败: {e}")
         return []
 
-def add_exam(supabase, class_id, exam_name, exam_date):
+def add_exam(supabase, class_id, exam_name, exam_date, academic_year):
     """添加考试"""
     try:
         response = supabase.table("exams").insert({
             "class_id": class_id,
             "exam_name": exam_name,
             "exam_date": exam_date.isoformat(),
-            "academic_year": str(datetime.now().year)
+            "academic_year": academic_year
         }).execute()
         return response.data[0]["id"] if response.data else None
     except Exception as e:
@@ -506,7 +471,9 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
         exam_data = student_data[student_data["考试"] == exam]
         if not exam_data.empty:
             html_content += f"<h2>{exam}</h2>"
-            html_content += "<table><tr><th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th></tr>"
+            html_content += "台_
+<th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th>
+</tr>"
             
             for subject in subjects:
                 code = subject["code"]
@@ -615,6 +582,82 @@ def parse_uploaded_file(uploaded_file):
     else:
         return pd.read_excel(uploaded_file, engine='openpyxl')
 
+# ========== 设置页面 ==========
+def show_settings_page(supabase, lang, t):
+    """显示设置页面"""
+    st.header(t["settings"])
+    
+    class_id = st.session_state.class_id
+    
+    # 获取当前设置
+    try:
+        response = supabase.table("school_settings").select("*").eq("class_id", class_id).execute()
+        settings = response.data[0] if response.data else {}
+    except:
+        settings = {}
+    
+    st.subheader("🏫 学校信息")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        school_name_zh = st.text_input("学校名称 (中文)", value=settings.get("school_name_zh", "学校名称"))
+        academic_year = st.text_input("当前学年", value=settings.get("current_academic_year", "2026"))
+    
+    with col2:
+        school_name_ms = st.text_input("Nama Sekolah (BM)", value=settings.get("school_name_ms", "Sekolah Saya"))
+        school_logo_url = st.text_input("校徽图片URL (可选)", value=settings.get("school_logo_url", ""))
+    
+    st.subheader("📝 考试设置")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        exam_name_prefix = st.text_input("考试名称前缀 (如: 期末考试)", value=settings.get("exam_name_prefix", ""))
+    with col2:
+        exam_name_suffix = st.text_input("考试名称后缀 (如: 2026)", value=settings.get("exam_name_suffix", academic_year))
+    
+    if exam_name_prefix or exam_name_suffix:
+        st.info(f"📌 考试名称示例: {exam_name_prefix}{exam_name_suffix}")
+    
+    # 保存按钮
+    if st.button(t["save_settings"], type="primary", use_container_width=True):
+        try:
+            data = {
+                "class_id": class_id,
+                "school_name_zh": school_name_zh,
+                "school_name_ms": school_name_ms,
+                "school_logo_url": school_logo_url,
+                "current_academic_year": academic_year,
+                "exam_name_prefix": exam_name_prefix,
+                "exam_name_suffix": exam_name_suffix,
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            if settings:
+                supabase.table("school_settings").update(data).eq("class_id", class_id).execute()
+            else:
+                supabase.table("school_settings").insert(data).execute()
+            
+            st.success(t["settings_saved"])
+            st.rerun()
+        except Exception as e:
+            st.error(f"保存失败: {e}")
+    
+    # 显示当前配置
+    st.markdown("---")
+    st.subheader("📊 当前配置预览")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**学校名称**: {school_name_zh}")
+        st.markdown(f"**当前学年**: {academic_year}")
+        st.markdown(f"**考试前缀**: {exam_name_prefix if exam_name_prefix else '(未设置)'}")
+    with col2:
+        st.markdown(f"**Nama Sekolah**: {school_name_ms}")
+        st.markdown(f"**考试后缀**: {exam_name_suffix if exam_name_suffix else '(使用学年)'}")
+    
+    st.info("💡 提示：考试成绩导入时，考试名称会自动使用「考试名称前缀 + 考试名称后缀」的格式")
+
+# ========== 登录页面 ==========
 def login_page(supabase):
     lang = st.session_state.get("language", "zh")
     t = TEXTS[lang]
@@ -661,10 +704,12 @@ def login_page(supabase):
             else:
                 st.error(t["wrong_password"])
 
+# ========== 主应用 ==========
 def main_app(supabase):
     lang = st.session_state.get("language", "zh")
     t = TEXTS[lang]
     
+    # 侧边栏
     if lang == "zh":
         st.sidebar.title(f"👩‍🏫 {st.session_state.class_name_zh}")
         st.sidebar.markdown(f"**班主任**：{st.session_state.teacher_zh}")
@@ -676,6 +721,7 @@ def main_app(supabase):
     
     st.sidebar.markdown("---")
     
+    # 语言切换
     col1, col2 = st.sidebar.columns(2)
     with col1:
         if st.button("🇨🇳 中文", use_container_width=True):
@@ -688,6 +734,7 @@ def main_app(supabase):
     
     st.sidebar.markdown("---")
     
+    # 科目筛选
     subject_filter = st.sidebar.radio(
         t["subject_display"],
         [t["core_only"], t["all_subjects"]],
@@ -695,9 +742,10 @@ def main_app(supabase):
     )
     filter_type = "core_only" if subject_filter == t["core_only"] else "all_subjects"
     
+    # 菜单
     menu = st.sidebar.radio(
         "功能菜单" if lang == "zh" else "Menu",
-        [t["student_performance"], t["class_performance"], t["data_management"], t["help"]]
+        [t["student_performance"], t["class_performance"], t["data_management"], t["settings"], t["help"]]
     )
     
     if st.sidebar.button(t["logout"], use_container_width=True):
@@ -706,10 +754,12 @@ def main_app(supabase):
                 del st.session_state[key]
         st.rerun()
     
+    # 加载数据
     students_df = get_students(supabase, st.session_state.class_id)
     exams = get_exams(supabase, st.session_state.class_id)
     subjects = get_subject_list(st.session_state.level, filter_type, lang)
     
+    # 学生个人成绩
     if menu == t["student_performance"]:
         st.header(t["student_performance"])
         
@@ -806,6 +856,7 @@ def main_app(supabase):
                                 mime="text/html"
                             )
     
+    # 班级成绩分析
     elif menu == t["class_performance"]:
         st.header(t["class_performance"])
         
@@ -860,6 +911,7 @@ def main_app(supabase):
                     display_cols = ["学生"] + subject_codes + ["总分", "排名"]
                     st.dataframe(class_df[display_cols].sort_values("排名"), use_container_width=True)
     
+    # 成绩管理
     elif menu == t["data_management"]:
         st.header(t["data_management"])
         
@@ -880,8 +932,24 @@ def main_app(supabase):
                     st.error("文件必须包含「学号」和「姓名」列" if lang == "zh" else "Fail mesti mengandungi lajur '学号' dan '姓名'")
         
         with tab2:
-            exam_name = st.text_input(t["exam_name"])
+            # 获取设置
+            try:
+                settings_response = supabase.table("school_settings").select("*").eq("class_id", st.session_state.class_id).execute()
+                settings = settings_response.data[0] if settings_response.data else {}
+            except:
+                settings = {}
+            
+            exam_name_prefix = settings.get("exam_name_prefix", "")
+            exam_name_suffix = settings.get("exam_name_suffix", settings.get("current_academic_year", "2026"))
+            default_exam_name = f"{exam_name_prefix}{exam_name_suffix}" if exam_name_prefix else ""
+            
+            exam_name = st.text_input(t["exam_name"], value=default_exam_name, placeholder="例如: 期末考试2026")
             exam_date = st.date_input(t["exam_date"], datetime.now())
+            
+            # 显示当前学年
+            current_year = settings.get("current_academic_year", "2026")
+            st.caption(f"当前学年: {current_year}")
+            
             uploaded_file = st.file_uploader(t["import_grades"], type=['csv', 'xlsx'], key="grade_upload")
             
             if exam_name and uploaded_file:
@@ -896,7 +964,7 @@ def main_app(supabase):
                         missing = df[df["student_id"].isna()]["学号"].tolist()
                         st.error(f"以下学号未在学生名单中找到: {missing}" if lang == "zh" else f"Nombor pelajar berikut tidak ditemui: {missing}")
                     else:
-                        exam_id = add_exam(supabase, st.session_state.class_id, exam_name, exam_date)
+                        exam_id = add_exam(supabase, st.session_state.class_id, exam_name, exam_date, current_year)
                         if exam_id:
                             if save_grades(supabase, exam_id, df):
                                 st.success(t["success"])
@@ -918,6 +986,11 @@ def main_app(supabase):
             else:
                 st.info(t["no_exams"])
     
+    # 系统设置
+    elif menu == t["settings"]:
+        show_settings_page(supabase, lang, t)
+    
+    # 帮助页面
     else:
         st.header(t["help"])
         if lang == "zh":
@@ -937,7 +1010,12 @@ def main_app(supabase):
             - 选择学生后可查看成绩趋势图、雷达图
             - 可生成 HTML 报告下载
             
-            **4. 数据存储**
+            **4. 系统设置**
+            - 可修改学校名称（中/马来文）
+            - 可设置当前学年
+            - 可自定义考试名称格式
+            
+            **5. 数据存储**
             - 所有数据存储在 Supabase 云端数据库
             """)
         else:
@@ -956,16 +1034,22 @@ def main_app(supabase):
             - Pilih pelajar untuk lihat carta trend dan radar
             - Hasilkan laporan HTML
             
-            **4. Penyimpanan Data**
+            **4. Tetapan Sistem**
+            - Ubah nama sekolah (Cina/Melayu)
+            - Tetap tahun akademik semasa
+            - Format nama peperiksaan boleh disesuaikan
+            
+            **5. Penyimpanan Data**
             - Semua data disimpan di pangkalan data Supabase
             """)
 
+# ========== 运行入口 ==========
 if __name__ == "__main__":
     init_session_state()
     supabase = init_supabase()
     
     if not supabase:
-        st.warning("⚠️ Supabase 连接失败，将使用演示模式")
+        st.warning("⚠️ Supabase 连接失败，请检查 Secrets 配置")
         st.stop()
     
     if not st.session_state.authenticated:
