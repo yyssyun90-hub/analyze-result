@@ -6,7 +6,6 @@ from datetime import datetime
 import numpy as np
 from supabase import create_client
 import io
-import re
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -35,6 +34,8 @@ TEXTS = {
         "student_performance": "📊 学生个人成绩",
         "class_performance": "📈 班级成绩分析",
         "data_management": "📁 成绩管理",
+        "student_achievements": "🏆 学生成就",
+        "student_comments": "📝 学生评语",
         "class_settings": "🏫 班级设置",
         "settings": "⚙️ 系统设置",
         "help": "ℹ️ 帮助",
@@ -85,7 +86,38 @@ TEXTS = {
         "core_subjects_only": "仅显示核心科目",
         "all_subjects_include": "显示全部科目",
         "no_data_radar": "暂无雷达图数据",
-        "no_data_box": "暂无分布图数据"
+        "no_data_box": "暂无分布图数据",
+        "competitions": "比赛项目",
+        "awards": "获奖情况",
+        "add_achievement": "添加成就",
+        "delete_achievement": "删除",
+        "competition_name": "比赛名称",
+        "award_name": "奖项名称",
+        "award_level": "奖项级别",
+        "no_achievements": "暂无成就记录",
+        "add_success": "成就添加成功！",
+        "delete_success": "成就删除成功！",
+        "award_level_school": "校级",
+        "award_level_district": "县级",
+        "award_level_state": "州级",
+        "award_level_national": "国家级",
+        "award_level_international": "国际级",
+        "notes": "备注",
+        "achievement_list": "成就列表",
+        "comment_title": "学生评语",
+        "auto_comment": "自动生成评语",
+        "manual_comment": "手动编辑评语",
+        "edit_comment": "编辑评语",
+        "save_comment": "保存评语",
+        "comment_saved": "评语已保存！",
+        "comment_generated": "评语已生成！",
+        "select_exam_for_comment": "选择考试",
+        "no_comment": "暂无评语",
+        "school_logo_left": "左侧校徽图片URL",
+        "school_logo_right": "右侧校徽图片URL",
+        "school_logo_left_help": "显示在页面左上角",
+        "school_logo_right_help": "显示在页面右上角",
+        "logo_placeholder": "校徽位置"
     },
     "ms": {
         "app_title": "Sistem Analisis Akademik SJKHK",
@@ -101,6 +133,8 @@ TEXTS = {
         "student_performance": "📊 Analisis Pelajar Individu",
         "class_performance": "📈 Analisis Prestasi Kelas",
         "data_management": "📁 Pengurusan Data",
+        "student_achievements": "🏆 Pencapaian Pelajar",
+        "student_comments": "📝 Ulasan Pelajar",
         "class_settings": "🏫 Tetapan Kelas",
         "settings": "⚙️ Tetapan Sistem",
         "help": "ℹ️ Bantuan",
@@ -151,7 +185,38 @@ TEXTS = {
         "core_subjects_only": "Paparan Subjek Teras",
         "all_subjects_include": "Paparan Semua Subjek",
         "no_data_radar": "Tiada data untuk carta radar",
-        "no_data_box": "Tiada data untuk carta kotak"
+        "no_data_box": "Tiada data untuk carta kotak",
+        "competitions": "Pertandingan",
+        "awards": "Anugerah",
+        "add_achievement": "Tambah Pencapaian",
+        "delete_achievement": "Padam",
+        "competition_name": "Nama Pertandingan",
+        "award_name": "Nama Anugerah",
+        "award_level": "Tahap Anugerah",
+        "no_achievements": "Tiada rekod pencapaian",
+        "add_success": "Pencapaian berjaya ditambah!",
+        "delete_success": "Pencapaian berjaya dipadam!",
+        "award_level_school": "Sekolah",
+        "award_level_district": "Daerah",
+        "award_level_state": "Negeri",
+        "award_level_national": "Kebangsaan",
+        "award_level_international": "Antarabangsa",
+        "notes": "Catatan",
+        "achievement_list": "Senarai Pencapaian",
+        "comment_title": "Ulasan Pelajar",
+        "auto_comment": "Hasilkan Ulasan Auto",
+        "manual_comment": "Ulasan Manual",
+        "edit_comment": "Edit Ulasan",
+        "save_comment": "Simpan Ulasan",
+        "comment_saved": "Ulasan disimpan!",
+        "comment_generated": "Ulasan dihasilkan!",
+        "select_exam_for_comment": "Pilih Peperiksaan",
+        "no_comment": "Tiada ulasan",
+        "school_logo_left": "URL Logo Kiri",
+        "school_logo_right": "URL Logo Kanan",
+        "school_logo_left_help": "Paparan di kiri atas",
+        "school_logo_right_help": "Paparan di kanan atas",
+        "logo_placeholder": "Lokasi Logo"
     }
 }
 
@@ -191,9 +256,19 @@ SUBJECTS_CONFIG = {
     }
 }
 
+# ========== HTML 转义函数 ==========
+def escape_html(text):
+    """HTML 特殊字符转义"""
+    if not text:
+        return ""
+    return (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;")
+                .replace("'", "&#39;"))
+
 # ========== 生成 Excel 模板 ==========
 def generate_student_template():
-    """生成学生名单模板"""
     df = pd.DataFrame({
         "学号": ["S001", "S002"],
         "姓名": ["陈小明", "李小华"],
@@ -205,7 +280,6 @@ def generate_student_template():
     return output.getvalue()
 
 def generate_grade_template(level):
-    """生成成绩模板（根据年级动态生成科目）"""
     config = SUBJECTS_CONFIG.get(level, SUBJECTS_CONFIG["low_primary"])
     all_subjects = config["core"] + config["elective"]
     
@@ -362,6 +436,197 @@ def delete_exam(supabase, exam_id):
     except Exception:
         return False
 
+# ========== 成就管理函数 ==========
+def get_achievements(supabase, student_id):
+    try:
+        response = supabase.table("student_achievements").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
+        return response.data if response.data else []
+    except Exception:
+        return []
+
+def add_achievement(supabase, student_id, class_id, competition_name, award_name, award_level, notes=""):
+    try:
+        response = supabase.table("student_achievements").insert({
+            "student_id": student_id,
+            "class_id": class_id,
+            "competition_name": competition_name,
+            "award_name": award_name,
+            "award_level": award_level,
+            "notes": notes
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+def delete_achievement(supabase, achievement_id):
+    try:
+        supabase.table("student_achievements").delete().eq("id", achievement_id).execute()
+        return True
+    except Exception:
+        return False
+
+# ========== 评语管理函数 ==========
+def get_comment(supabase, student_id, exam_name):
+    try:
+        response = supabase.table("student_comments").select("*").eq("student_id", student_id).eq("exam_name", exam_name).execute()
+        return response.data[0] if response.data else None
+    except Exception:
+        return None
+
+def save_comment(supabase, student_id, class_id, exam_name, comment_text, comment_type="manual"):
+    try:
+        existing = get_comment(supabase, student_id, exam_name)
+        if existing:
+            supabase.table("student_comments").update({
+                "comment_text": comment_text,
+                "comment_type": comment_type,
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", existing["id"]).execute()
+        else:
+            supabase.table("student_comments").insert({
+                "student_id": student_id,
+                "class_id": class_id,
+                "exam_name": exam_name,
+                "comment_text": comment_text,
+                "comment_type": comment_type
+            }).execute()
+        return True
+    except Exception:
+        return False
+
+# ========== 评语生成函数 ==========
+def generate_auto_comment(student_name, student_data, subjects, latest_exam, achievements, lang):
+    """根据学生成绩和成就自动生成评语"""
+    if student_data.empty:
+        return "暂无数据生成评语。" if lang == "zh" else "Tiada data untuk ulasan."
+    
+    latest_data = student_data[student_data["考试"] == latest_exam]
+    if latest_data.empty:
+        return "暂无数据生成评语。" if lang == "zh" else "Tiada data untuk ulasan."
+    
+    latest_data = latest_data.iloc[0]
+    
+    scores = {}
+    for subject in subjects:
+        code = subject["code"]
+        if code in latest_data and pd.notna(latest_data[code]):
+            try:
+                scores[code] = float(latest_data[code])
+            except:
+                pass
+    
+    if not scores:
+        return "暂无足够数据生成评语。" if lang == "zh" else "Tiada data yang mencukupi untuk ulasan."
+    
+    avg_score = sum(scores.values()) / len(scores)
+    
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    strengths = [s[0] for s in sorted_scores[:2] if s[1] >= 75]
+    weaknesses = [s[0] for s in sorted_scores[-2:] if s[1] < 60]
+    
+    progress = 0
+    if len(student_data) >= 2:
+        prev_data = student_data.iloc[-2]
+        prev_scores = []
+        for subject in subjects:
+            code = subject["code"]
+            if code in prev_data and pd.notna(prev_data[code]) and code in scores:
+                prev_scores.append(prev_data[code])
+        if prev_scores:
+            prev_avg = sum(prev_scores) / len(prev_scores)
+            progress = avg_score - prev_avg
+    
+    def get_subject_name(code):
+        for s in subjects:
+            if s["code"] == code:
+                return s["name_zh"] if lang == "zh" else s["name_ms"]
+        return code
+    
+    if lang == "zh":
+        if avg_score >= 85:
+            overall = "成绩优异，学习态度端正"
+        elif avg_score >= 70:
+            overall = "成绩良好，学习认真"
+        elif avg_score >= 60:
+            overall = "成绩合格，有提升空间"
+        else:
+            overall = "成绩有待提高，需要加强努力"
+        
+        strength_text = ""
+        if strengths:
+            strength_names = [get_subject_name(c) for c in strengths]
+            strength_text = f"{'、'.join(strength_names)}是你的优势科目，希望继续保持！"
+        
+        weakness_text = ""
+        if weaknesses:
+            weakness_names = [get_subject_name(c) for c in weaknesses]
+            weakness_text = f"建议在{'、'.join(weakness_names)}上多花时间，加强练习。"
+        
+        progress_text = ""
+        if progress > 5:
+            progress_text = "本学期进步明显，值得表扬！"
+        elif progress < -5:
+            progress_text = "成绩有所下滑，希望调整学习状态。"
+        elif abs(progress) <= 5:
+            progress_text = "成绩稳定，继续保持。"
+        
+        award_text = ""
+        if achievements:
+            award_count = len(achievements)
+            award_text = f"此外，该生在比赛中获得{award_count}项荣誉，展现了良好的综合素质！"
+        
+        comment = f"""{student_name}同学：{overall}。本次考试平均分{avg_score:.1f}分。
+
+{strength_text}
+{weakness_text}
+{progress_text}
+{award_text}
+
+希望你在新学期继续努力，取得更好的成绩！"""
+    else:
+        if avg_score >= 85:
+            overall = "pencapaian cemerlang, sikap pembelajaran baik"
+        elif avg_score >= 70:
+            overall = "pencapaian baik, tekun belajar"
+        elif avg_score >= 60:
+            overall = "pencapaian memuaskan, ada ruang untuk penambahbaikan"
+        else:
+            overall = "pencapaian perlu dipertingkatkan, perlu lebih usaha"
+        
+        strength_text = ""
+        if strengths:
+            strength_names = [get_subject_name(c) for c in strengths]
+            strength_text = f"{'、'.join(strength_names)} adalah subjek kekuatan anda, teruskan usaha!"
+        
+        weakness_text = ""
+        if weaknesses:
+            weakness_names = [get_subject_name(c) for c in weaknesses]
+            weakness_text = f"Disarankan untuk memberi lebih tumpuan kepada {'、'.join(weakness_names)}."
+        
+        progress_text = ""
+        if progress > 5:
+            progress_text = "Pencapaian meningkat dengan ketara, tahniah!"
+        elif progress < -5:
+            progress_text = "Pencapaian menurun, harap dapat memperbaiki."
+        elif abs(progress) <= 5:
+            progress_text = "Pencapaian stabil, teruskan usaha."
+        
+        award_text = ""
+        if achievements:
+            award_count = len(achievements)
+            award_text = f"Selain itu, pelajar ini telah mencapai {award_count} anugerah dalam pertandingan!"
+        
+        comment = f"""Pelajar {student_name}: {overall}. Purata markah peperiksaan ini ialah {avg_score:.1f}.
+
+{strength_text}
+{weakness_text}
+{progress_text}
+{award_text}
+
+Diharap terus berusaha untuk mencapai kejayaan yang lebih cemerlang!"""
+    
+    return comment.strip()
+
 # ========== 图表生成函数 ==========
 def create_line_chart(student_data, exams, subjects, lang):
     fig = go.Figure()
@@ -481,12 +746,24 @@ def create_box_plot(class_df, subjects, exam_name, lang):
     )
     return fig
 
-def generate_simple_report(student_name, student_data, exams, subjects, class_avg_data, lang):
+def generate_simple_report(student_name, student_data, exams, subjects, class_avg_data, achievements, comment_text, lang):
+    """生成简单的 HTML 报告"""
+    if comment_text is None or comment_text == "":
+        comment_text = "暂无评语。" if lang == "zh" else "Tiada ulasan."
+    
+    award_level_map = {
+        "school": "校级" if lang == "zh" else "Sekolah",
+        "district": "县级" if lang == "zh" else "Daerah",
+        "state": "州级" if lang == "zh" else "Negeri",
+        "national": "国家级" if lang == "zh" else "Kebangsaan",
+        "international": "国际级" if lang == "zh" else "Antarabangsa"
+    }
+    
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{student_name} - Academic Report</title>
+    <title>{escape_html(student_name)} - Academic Report</title>
     <style>
         body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}
         .container {{ max-width: 1000px; margin: 0 auto; background: white; border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }}
@@ -495,21 +772,23 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
         th {{ background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px; }}
         td {{ border: 1px solid #e0e0e0; padding: 10px; text-align: center; }}
-        .advice {{ background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 30px; border-left: 4px solid #667eea; }}
+        .comment {{ background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 30px; border-left: 4px solid #667eea; white-space: pre-line; }}
+        .achievement {{ background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #4ECDC4; }}
         .date {{ text-align: center; color: #666; margin-bottom: 30px; }}
+        .award-badge {{ display: inline-block; background: #4ECDC4; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 5px; }}
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>📊 {student_name} - 成绩分析报告</h1>
+    <h1>📊 {escape_html(student_name)} - 成绩分析报告</h1>
     <div class="date">生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
 """
     for exam in exams:
         exam_data = student_data[student_data["考试"] == exam]
         if not exam_data.empty:
-            html_content += f"<h2>📚 {exam}</h2>"
+            html_content += f"<h2>📚 {escape_html(exam)}</h2>"
             html_content += "广播电台\n"
-            html_content += "    <thead>\n        <tr><th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th></tr>\n    </thead>\n    <tbody>\n"
+            html_content += "    <thead>\n        <tr><th>科目</th><th>成绩</th><th>班级平均</th><th>差距</th></thead>\n    <tbody>\n"
             for subject in subjects:
                 code = subject["code"]
                 if code in exam_data.columns:
@@ -520,78 +799,44 @@ def generate_simple_report(student_name, student_data, exams, subjects, class_av
                         diff = score - avg
                         diff_color = "#10b981" if diff >= 0 else "#ef4444"
                         name = subject["name_zh"] if lang == "zh" else subject["name_ms"]
-                        html_content += f"         <tr><td>{name}</td><td><strong>{score:.1f}</strong></td><td>{avg:.1f}</td><td style='color:{diff_color}'>{diff:+.1f}</td></tr>\n"
+                        html_content += f"            <td>{escape_html(name)}</td><td><strong>{score:.1f}</strong></td><td>{avg:.1f}</td><td style='color:{diff_color}'>{diff:+.1f}</td></tr>\n"
                     except:
                         pass
             html_content += "    </tbody>\n</table>\n"
-    if exams:
-        advice = generate_rule_based_advice(student_data, subjects, exams[-1], lang)
-    else:
-        advice = "暂无数据生成建议。" if lang == "zh" else "Tiada data untuk cadangan."
+    
+    if achievements:
+        html_content += f"""
+    <h2>🏆 获奖成就</h2>
+    <table>
+        <thead>
+            <tr><th>比赛名称</th><th>奖项</th><th>级别</th><th>备注</th></tr>
+        </thead>
+        <tbody>
+"""
+        for a in achievements:
+            level_display = award_level_map.get(a.get("award_level", ""), a.get("award_level", ""))
+            html_content += f"""
+            <tr>
+                <td>{escape_html(a.get('competition_name', ''))}</td>
+                <td><strong>{escape_html(a.get('award_name', ''))}</strong></td>
+                <td><span class="award-badge">{escape_html(level_display)}</span></td>
+                <td>{escape_html(a.get('notes', ''))}</td>
+            </tr>
+"""
+        html_content += """
+        </tbody>
+    </table>
+"""
+    
     html_content += f"""
-    <div class="advice">
-        <h3>💡 学习建议</h3>
-        {advice.replace(chr(10), '<br>')}
+    <div class="comment">
+        <h3>📝 教师评语</h3>
+        <p>{escape_html(comment_text).replace(chr(10), '<br>')}</p>
     </div>
 </div>
 </body>
 </html>"""
     return html_content
-
-def generate_rule_based_advice(student_data, subjects, latest_exam, lang):
-    if student_data.empty:
-        return "暂无数据生成建议。" if lang == "zh" else "Tiada data untuk cadangan."
-    latest_data = student_data[student_data["考试"] == latest_exam]
-    if latest_data.empty:
-        return "暂无数据生成建议。" if lang == "zh" else "Tiada data untuk cadangan."
-    latest_data = latest_data.iloc[0]
-    scores = {}
-    for subject in subjects:
-        code = subject["code"]
-        if code in latest_data and pd.notna(latest_data[code]):
-            try:
-                scores[code] = float(latest_data[code])
-            except:
-                pass
-    if not scores:
-        return "暂无足够数据生成建议。" if lang == "zh" else "Tiada data yang mencukupi untuk cadangan."
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    avg_score = sum(scores.values()) / len(scores)
-    strengths = [s[0] for s in sorted_scores[:2] if s[1] >= 75]
-    weaknesses = [s[0] for s in sorted_scores[-2:] if s[1] < 60]
-    def get_subject_name(code):
-        for s in subjects:
-            if s["code"] == code:
-                return s["name_zh"] if lang == "zh" else s["name_ms"]
-        return code
-    if lang == "zh":
-        return f"""
-📊 **总体评价**：本次考试平均分 {avg_score:.1f} 分，{'表现优秀' if avg_score >= 80 else '表现良好' if avg_score >= 70 else '有提升空间'}。
-
-🌟 **优势科目**：{', '.join([get_subject_name(c) for c in strengths]) if strengths else '暂无明显优势科目'}，请继续保持！
-
-📚 **需要加强**：{', '.join([get_subject_name(c) for c in weaknesses]) if weaknesses else '各科发展均衡'}，建议多花时间练习。
-
-💡 **学习建议**：
-• 每天安排 30 分钟复习薄弱科目
-• 建立错题本，定期回顾
-• 与同学组成学习小组
-• 保持良好作息，提高效率
-"""
-    else:
-        return f"""
-📊 **Penilaian Keseluruhan**: Purata markah {avg_score:.1f}, {'cemerlang' if avg_score >= 80 else 'baik' if avg_score >= 70 else 'perlu penambahbaikan'}.
-
-🌟 **Subjek Kekuatan**: {', '.join([get_subject_name(c) for c in strengths]) if strengths else 'Tiada subjek kekuatan yang ketara'}.
-
-📚 **Perlu Diperbaiki**: {', '.join([get_subject_name(c) for c in weaknesses]) if weaknesses else 'Semua subjek seimbang'}.
-
-💡 **Cadangan Pembelajaran**:
-• Luangkan 30 minit setiap hari untuk subjek lemah
-• Bina buku catatan kesilapan
-• Bentuk kumpulan belajar
-• Kekalkan rutin tidur yang baik
-"""
 
 def get_subject_list(level, filter_type, lang):
     config = SUBJECTS_CONFIG.get(level, SUBJECTS_CONFIG["low_primary"])
@@ -610,10 +855,174 @@ def parse_uploaded_file(uploaded_file):
         return pd.read_excel(uploaded_file, engine='openpyxl')
 
 def normalize_column_name(col):
-    """标准化列名，去除空格并转为大写"""
     if isinstance(col, str):
         return col.strip().upper()
     return col
+
+# ========== 显示双校徽 ==========
+def display_dual_logos(settings, lang, t):
+    """显示左右两个校徽"""
+    left_logo = settings.get("school_logo_left", "") if settings else ""
+    right_logo = settings.get("school_logo_right", "") if settings else ""
+    
+    # 使用三列布局：左校徽、中间空白、右校徽
+    col_left, col_mid, col_right = st.columns([1, 3, 1])
+    
+    with col_left:
+        if left_logo and left_logo.strip():
+            st.image(left_logo, width=80)
+        else:
+            st.markdown(f"<div style='text-align: left; color: #999; font-size: 12px;'>{t['logo_placeholder']}</div>", unsafe_allow_html=True)
+    
+    with col_mid:
+        st.markdown("")
+    
+    with col_right:
+        if right_logo and right_logo.strip():
+            st.image(right_logo, width=80)
+        else:
+            st.markdown(f"<div style='text-align: right; color: #999; font-size: 12px;'>{t['logo_placeholder']}</div>", unsafe_allow_html=True)
+
+# ========== 成就管理页面 ==========
+def show_achievements_page(supabase, lang, t, students_df):
+    st.header(t["student_achievements"])
+    
+    if students_df.empty:
+        st.warning(t["no_students"])
+        return
+    
+    student_options = {row["name_zh"]: row["id"] for _, row in students_df.iterrows()}
+    student_name = st.selectbox(t["select_student"], list(student_options.keys()), key="achievement_student")
+    student_id = student_options[student_name]
+    
+    achievements = get_achievements(supabase, student_id)
+    
+    with st.expander("➕ " + t["add_achievement"], expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            competition_name = st.text_input(t["competition_name"], key="comp_name")
+            award_name = st.text_input(t["award_name"], key="award_name")
+        with col2:
+            award_level = st.selectbox(
+                t["award_level"],
+                [
+                    ("school", t["award_level_school"]),
+                    ("district", t["award_level_district"]),
+                    ("state", t["award_level_state"]),
+                    ("national", t["award_level_national"]),
+                    ("international", t["award_level_international"])
+                ],
+                format_func=lambda x: x[1],
+                key="award_level_select"
+            )
+            notes = st.text_input(t["notes"], key="notes")
+        
+        if st.button(t["add_achievement"], type="primary"):
+            if competition_name and award_name:
+                if add_achievement(supabase, student_id, st.session_state.class_id, competition_name, award_name, award_level[0], notes):
+                    st.success(t["add_success"])
+                    st.rerun()
+                else:
+                    st.error("添加失败")
+            else:
+                st.error("请填写比赛名称和奖项名称")
+    
+    st.subheader(t["achievement_list"])
+    if achievements:
+        award_level_map = {
+            "school": t["award_level_school"],
+            "district": t["award_level_district"],
+            "state": t["award_level_state"],
+            "national": t["award_level_national"],
+            "international": t["award_level_international"]
+        }
+        
+        for ach in achievements:
+            with st.container():
+                col1, col2, col3, col4, col5 = st.columns([2, 1.5, 1, 1.5, 0.5])
+                with col1:
+                    st.write(f"**{ach['competition_name']}**")
+                with col2:
+                    st.write(ach['award_name'])
+                with col3:
+                    level = ach.get('award_level', '')
+                    st.write(award_level_map.get(level, level))
+                with col4:
+                    if ach.get('notes'):
+                        st.write(ach['notes'][:30])
+                    else:
+                        st.write("-")
+                with col5:
+                    if st.button("🗑️", key=f"del_ach_{ach['id']}"):
+                        if delete_achievement(supabase, ach['id']):
+                            st.success(t["delete_success"])
+                            st.rerun()
+                st.divider()
+    else:
+        st.info(t["no_achievements"])
+
+# ========== 评语管理页面 ==========
+def show_comments_page(supabase, lang, t, students_df, exams, subjects):
+    st.header(t["student_comments"])
+    
+    if students_df.empty:
+        st.warning(t["no_students"])
+        return
+    
+    if not exams:
+        st.info(t["no_exams"])
+        return
+    
+    student_options = {row["name_zh"]: row["id"] for _, row in students_df.iterrows()}
+    student_name = st.selectbox(t["select_student"], list(student_options.keys()), key="comment_student")
+    student_id = student_options[student_name]
+    
+    exam_options = [e["exam_name"] for e in exams]
+    selected_exam = st.selectbox(t["select_exam_for_comment"], exam_options, key="comment_exam")
+    
+    exam_record = next((e for e in exams if e["exam_name"] == selected_exam), None)
+    if not exam_record:
+        st.warning("考试不存在")
+        return
+    
+    grades = get_grades(supabase, exam_record["id"])
+    student_grade = next((g for g in grades if g["student_id"] == student_id), None)
+    
+    student_data = []
+    if student_grade and student_grade["scores"]:
+        record = {"考试": selected_exam}
+        for code, score in student_grade["scores"].items():
+            if score is not None:
+                record[code] = score
+        student_data.append(record)
+    
+    achievements = get_achievements(supabase, student_id)
+    
+    saved_comment = get_comment(supabase, student_id, selected_exam)
+    comment_text = saved_comment["comment_text"] if saved_comment else ""
+    
+    st.subheader(t["comment_title"])
+    
+    tab1, tab2 = st.tabs([t["auto_comment"], t["manual_comment"]])
+    
+    with tab1:
+        if student_data:
+            df_student = pd.DataFrame(student_data)
+            auto_comment = generate_auto_comment(student_name, df_student, subjects, selected_exam, achievements, lang)
+            st.text_area("自动生成的评语", value=auto_comment, height=200, key="auto_comment_display")
+            if st.button(t["save_comment"], key="save_auto"):
+                if save_comment(supabase, student_id, st.session_state.class_id, selected_exam, auto_comment, "auto"):
+                    st.success(t["comment_saved"])
+                    st.rerun()
+        else:
+            st.warning("暂无该学生此考试的成绩数据")
+    
+    with tab2:
+        manual_comment = st.text_area("编辑评语", value=comment_text, height=200, key="manual_comment_input")
+        if st.button(t["save_comment"], key="save_manual"):
+            if save_comment(supabase, student_id, st.session_state.class_id, selected_exam, manual_comment, "manual"):
+                st.success(t["comment_saved"])
+                st.rerun()
 
 # ========== 班级设置页面 ==========
 def show_class_settings_page(supabase, lang, t, classes):
@@ -647,6 +1056,7 @@ def show_settings_page(supabase, lang, t):
         settings = response.data[0] if response.data else {}
     except:
         settings = {}
+    
     st.markdown("### 🏫 " + t["school_name"])
     col1, col2 = st.columns(2)
     with col1:
@@ -654,19 +1064,40 @@ def show_settings_page(supabase, lang, t):
         academic_year = st.text_input(t["academic_year"], value=settings.get("current_academic_year", "2026"))
     with col2:
         school_name_ms = st.text_input("Nama Sekolah (BM)", value=settings.get("school_name_ms", "SJKHK"))
-        school_logo_url = st.text_input("校徽图片URL (可选)", value=settings.get("school_logo_url", ""))
+    
+    st.markdown("### 🖼️ 校徽设置")
+    col1, col2 = st.columns(2)
+    with col1:
+        school_logo_left = st.text_input(
+            t["school_logo_left"], 
+            value=settings.get("school_logo_left", ""),
+            help=t["school_logo_left_help"]
+        )
+    with col2:
+        school_logo_right = st.text_input(
+            t["school_logo_right"], 
+            value=settings.get("school_logo_right", ""),
+            help=t["school_logo_right_help"]
+        )
+    
     st.markdown("### 📝 考试设置")
     col1, col2 = st.columns(2)
     with col1:
         exam_name_prefix = st.text_input("考试名称前缀", value=settings.get("exam_name_prefix", ""))
     with col2:
         exam_name_suffix = st.text_input("考试名称后缀", value=settings.get("exam_name_suffix", academic_year))
+    
     if st.button(t["save_settings"], type="primary", use_container_width=True):
         try:
             data = {
-                "class_id": class_id, "school_name_zh": school_name_zh, "school_name_ms": school_name_ms,
-                "school_logo_url": school_logo_url, "current_academic_year": academic_year,
-                "exam_name_prefix": exam_name_prefix, "exam_name_suffix": exam_name_suffix,
+                "class_id": class_id,
+                "school_name_zh": school_name_zh,
+                "school_name_ms": school_name_ms,
+                "school_logo_left": school_logo_left,
+                "school_logo_right": school_logo_right,
+                "current_academic_year": academic_year,
+                "exam_name_prefix": exam_name_prefix,
+                "exam_name_suffix": exam_name_suffix,
                 "updated_at": datetime.now().isoformat()
             }
             if settings:
@@ -675,13 +1106,27 @@ def show_settings_page(supabase, lang, t):
                 supabase.table("school_settings").insert(data).execute()
             st.success(t["settings_saved"])
             st.rerun()
-        except:
-            st.error("保存失败")
+        except Exception as e:
+            st.error(f"保存失败: {e}")
 
 # ========== 登录页面 ==========
 def login_page(supabase):
     lang = st.session_state.get("language", "zh")
     t = TEXTS[lang]
+    
+    # 获取学校设置（用于显示校徽）
+    classes = get_classes(supabase)
+    settings = {}
+    if classes:
+        try:
+            response = supabase.table("school_settings").select("*").eq("class_id", classes[0]["id"]).execute()
+            settings = response.data[0] if response.data else {}
+        except:
+            pass
+    
+    # 显示双校徽
+    display_dual_logos(settings, lang, t)
+    
     st.markdown("""
     <style>
     .login-title { text-align: center; margin-bottom: 2rem; }
@@ -690,6 +1135,7 @@ def login_page(supabase):
     </style>
     """, unsafe_allow_html=True)
     st.markdown(f'<div class="login-title"><h1>🎓 {t["app_title"]}</h1><p>{t["subtitle"]}</p></div>', unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         col_lang1, col_lang2 = st.columns(2)
@@ -702,10 +1148,11 @@ def login_page(supabase):
                 st.session_state.language = "ms"
                 st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
-        classes = get_classes(supabase)
+        
         if not classes:
             st.warning("⚠️ 暂无班级数据\n\n请在 Supabase 数据库中创建班级记录。")
             return
+        
         with st.form("login_form"):
             login_mode = st.radio("登录模式", [t["teacher_mode"], t["principal_mode"]], horizontal=True)
             if login_mode == t["teacher_mode"]:
@@ -750,6 +1197,17 @@ def main_app(supabase):
     t = TEXTS[lang]
     all_classes = get_classes(supabase)
     
+    # 获取学校设置（用于显示校徽）
+    settings = {}
+    try:
+        response = supabase.table("school_settings").select("*").eq("class_id", st.session_state.class_id).execute()
+        settings = response.data[0] if response.data else {}
+    except:
+        pass
+    
+    # 显示双校徽
+    display_dual_logos(settings, lang, t)
+    
     if st.session_state.is_principal:
         st.sidebar.markdown("""
         <style>
@@ -792,9 +1250,9 @@ def main_app(supabase):
     filter_type = "core_only" if subject_filter == t["core_only"] else "all_subjects"
     
     if st.session_state.is_principal:
-        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["class_settings"], t["settings"], t["help"]]
+        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["student_achievements"], t["student_comments"], t["class_settings"], t["settings"], t["help"]]
     else:
-        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["settings"], t["help"]]
+        menu_options = [t["student_performance"], t["class_performance"], t["data_management"], t["student_achievements"], t["student_comments"], t["settings"], t["help"]]
     menu = st.sidebar.radio("", menu_options)
     
     if st.sidebar.button(t["logout"], use_container_width=True):
@@ -867,7 +1325,7 @@ def main_app(supabase):
                     else:
                         st.info(t.get("no_data_radar", "暂无雷达图数据"))
                     st.subheader("📝 学习建议")
-                    advice = generate_rule_based_advice(df_student, subjects, latest_exam, lang)
+                    advice = generate_auto_comment(student_name, df_student, subjects, latest_exam, [], lang)
                     st.markdown(advice)
                 with tab3:
                     if st.button(t["generate_report"], type="primary"):
@@ -888,7 +1346,10 @@ def main_app(supabase):
                                     class_avg_data[exam_name] = {k: np.mean(v) for k, v in class_avg.items()}
                                 else:
                                     class_avg_data[exam_name] = {}
-                            html_report = generate_simple_report(student_name, df_student, selected_exams, subjects, class_avg_data, lang)
+                            achievements = get_achievements(supabase, student_id)
+                            comment = get_comment(supabase, student_id, selected_exams[-1])
+                            comment_text = comment["comment_text"] if comment else generate_auto_comment(student_name, df_student, subjects, selected_exams[-1], achievements, lang)
+                            html_report = generate_simple_report(student_name, df_student, selected_exams, subjects, class_avg_data, achievements, comment_text, lang)
                             st.download_button(label=t["download_report"], data=html_report, file_name=f"{student_name}_成绩报告_{datetime.now().strftime('%Y%m%d')}.html", mime="text/html")
     
     # ========== 班级成绩分析 ==========
@@ -987,7 +1448,6 @@ def main_app(supabase):
             if exam_name and uploaded_file:
                 df = parse_uploaded_file(uploaded_file)
                 if '学号' in df.columns and '姓名' in df.columns:
-                    # 标准化列名
                     df.columns = [normalize_column_name(col) for col in df.columns]
                     students = get_students(supabase, st.session_state.class_id)
                     student_map = {str(row["student_no"]): row["id"] for _, row in students.iterrows()}
@@ -1017,6 +1477,14 @@ def main_app(supabase):
             else:
                 st.info(t["no_exams"])
     
+    # ========== 学生成就 ==========
+    elif menu == t["student_achievements"]:
+        show_achievements_page(supabase, lang, t, students_df)
+    
+    # ========== 学生评语 ==========
+    elif menu == t["student_comments"]:
+        show_comments_page(supabase, lang, t, students_df, exams, subjects)
+    
     # ========== 班级设置 ==========
     elif menu == t["class_settings"] and st.session_state.is_principal:
         show_class_settings_page(supabase, lang, t, all_classes)
@@ -1034,19 +1502,21 @@ def main_app(supabase):
             <h4 style="color: #667eea;">📌 快速入门</h4>
             <p><strong>1. 导入学生名单</strong><br>点击「下载模板」，填写后上传（需包含学号、姓名）</p>
             <p><strong>2. 导入考试成绩</strong><br>下载成绩模板，填写各科成绩后上传（副科可留空）</p>
-            <p><strong>3. 查看分析</strong><br>选择学生查看成绩趋势图、雷达图，可下载报告</p>
-            <p><strong>4. 班主任管理</strong><br>校领导可在「班级设置」中修改班主任姓名</p>
+            <p><strong>3. 记录学生成就</strong><br>在「学生成就」中记录学生参加比赛和获奖情况</p>
+            <p><strong>4. 编辑学生评语</strong><br>在「学生评语」中可选择自动生成或手动编辑评语</p>
+            <p><strong>5. 查看分析</strong><br>选择学生查看成绩趋势图、雷达图，报告会自动包含成就和评语</p>
             </div>
             <div style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 20px; border-radius: 15px; margin: 10px 0;">
-            <h4 style="color: #667eea;">📊 科目说明</h4>
-            <p><strong>核心科目：</strong>华文(BC)、国文(BM)、英文(BI)、数学(MT)、科学(SN)、历史(SEJ)</p>
-            <p><strong>副科：</strong>体育(PJPK)、美术(PSV)、音乐(MUZIK)、道德(MORAL)、技术与工艺(RBT)</p>
-            <p>💡 没有考的副科可以不填写，不影响系统使用</p>
+            <h4 style="color: #667eea;">🏆 成就管理说明</h4>
+            <p><strong>比赛项目：</strong>填写学生参加的比赛名称</p>
+            <p><strong>获奖情况：</strong>填写获得的奖项（如：冠军、亚军、优秀奖等）</p>
+            <p><strong>奖项级别：</strong>校级、县级、州级、国家级、国际级</p>
             </div>
             <div style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 20px; border-radius: 15px; margin: 10px 0;">
-            <h4 style="color: #667eea;">🔐 权限说明</h4>
-            <p><strong>班主任</strong> - 只能查看和操作本班数据</p>
-            <p><strong>校领导</strong> - 可查看所有班级，管理班主任信息</p>
+            <h4 style="color: #667eea;">📝 评语管理说明</h4>
+            <p><strong>自动生成：</strong>系统根据成绩和成就自动生成评语</p>
+            <p><strong>手动编辑：</strong>班主任可以自定义评语内容</p>
+            <p>💡 评语会保存在数据库中，下次查看时可继续编辑</p>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -1055,14 +1525,9 @@ def main_app(supabase):
             <h4 style="color: #667eea;">📌 Panduan Pantas</h4>
             <p><strong>1. Import Senarai Pelajar</strong><br>Klik 'Muat Turun Templat', isi dan muat naik</p>
             <p><strong>2. Import Markah</strong><br>Muat turun templat markah, isi markah (subjek elektif boleh dikosongkan)</p>
-            <p><strong>3. Analisis</strong><br>Pilih pelajar untuk lihat carta trend dan radar</p>
-            <p><strong>4. Pengurusan Guru</strong><br>Pentadbir boleh ubah nama guru di 'Tetapan Kelas'</p>
-            </div>
-            <div style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 20px; border-radius: 15px; margin: 10px 0;">
-            <h4 style="color: #667eea;">📊 Penerangan Subjek</h4>
-            <p><strong>Subjek Teras:</strong> BC, BM, BI, MT, SN, SEJ</p>
-            <p><strong>Subjek Elektif:</strong> PJPK, PSV, Muzik, Moral, RBT</p>
-            <p>💡 Subjek yang tidak diambil boleh dikosongkan</p>
+            <p><strong>3. Rekod Pencapaian</strong><br>Rekod penyertaan dan kemenangan pelajar di 'Pencapaian Pelajar'</p>
+            <p><strong>4. Edit Ulasan</strong><br>Pilih hasilkan ulasan auto atau edit manual di 'Ulasan Pelajar'</p>
+            <p><strong>5. Analisis</strong><br>Pilih pelajar untuk lihat carta trend dan radar, laporan akan termasuk pencapaian dan ulasan</p>
             </div>
             """, unsafe_allow_html=True)
 
